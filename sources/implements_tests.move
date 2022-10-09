@@ -197,11 +197,18 @@ module swap::implements_tests {
             assert!(token_reserve == 0, 3);
             assert!(lp_supply == 0, 3);
 
+            let (sui_fee, token_fee, fee_sui, fee_token) = implements::withdraw<BEEP>(pool_mut, ctx(test));
+
             // make sure that withdrawn assets
             let burn_sui = burn(sui);
             let burn_token = burn(token);
-            assert!(burn_sui == 1003994029, burn_sui);
-            assert!(burn_token == 996040, burn_token);
+            let burn_sui_fee = burn(sui_fee);
+            let burn_token_fee = burn(token_fee);
+
+            assert!(burn_sui_fee == fee_sui, fee_sui);
+            assert!(burn_token_fee == fee_token, fee_token);
+            assert!(burn_sui == 1003979044, burn_sui);
+            assert!(burn_token == 996037, burn_token);
 
             test_scenario::return_shared(test, pool);
         };

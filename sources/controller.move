@@ -7,12 +7,16 @@ module swap::controller {
   const ERR_ALREADY_PAUSE: u64 = 202;
   const ERR_NOT_PAUSE: u64 = 203;
 
+  /// Entrypoint for the `pause` method.
+  /// Pause all pools under the global.
   public entry fun pause(global: &mut Global, ctx: &mut TxContext){
     assert!(!implements::is_emergency(global), ERR_ALREADY_PAUSE);
     assert!(implements::controller(global) == tx_context::sender(ctx), ERR_NO_PERMISSIONS);
     implements::pause(global)
   }
 
+  /// Entrypoint for the `resume` method.
+  /// Resume all pools under the global.
   public entry fun resume(global: &mut Global, ctx: &mut TxContext){
     assert!(implements::is_emergency(global), ERR_NOT_PAUSE);
     assert!(implements::controller(global) == tx_context::sender(ctx), ERR_NO_PERMISSIONS);

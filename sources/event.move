@@ -37,6 +37,14 @@ module swap::event {
         token_out: u64,
     }
 
+    /// Liquidity pool withdrew fee coins event.
+    struct WithdrewEvent<phantom T> has copy, drop {
+        global: ID,
+        pool: ID,
+        sui_fee: u64,
+        token_fee: u64
+    }
+
     public fun created_event<T>(
         global: ID,
         pool: ID,
@@ -101,6 +109,22 @@ module swap::event {
                 sui_out,
                 token_in,
                 token_out
+            }
+        )
+    }
+
+    public fun withdrew_event<T>(
+        global: ID,
+        pool: ID,
+        sui_fee: u64,
+        token_fee: u64,
+    ) {
+        emit(
+            WithdrewEvent<T> {
+                global,
+                pool,
+                sui_fee,
+                token_fee
             }
         )
     }

@@ -13,6 +13,7 @@ module swap::implements {
   use sui::sui::SUI;
   use sui::transfer;
 
+  friend swap::beneficiary;
   friend swap::controller;
   friend swap::interface;
 
@@ -33,9 +34,11 @@ module swap::implements {
   /// Amount out less than minimum.
   const ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM: u64 = 7;
 
-  const FEE_MULTIPLIER: u64 = 30;
-  const FEE_SCALE: u64 = 10000;
 
+  /// Current fee is 0.3%
+  const FEE_MULTIPLIER: u64 = 30;
+  /// The integer scaling setting for fees calculation.
+  const FEE_SCALE: u64 = 10000;
   /// The max value that can be held in one of the Balances of
   /// a Pool. U64 MAX / FEE_SCALE
   const MAX_POOL_VALUE: u64 = {
@@ -53,7 +56,9 @@ module swap::implements {
     id: UID,
     global: ID,
     sui: Balance<SUI>,
+    fee_sui: Balance<SUI>,
     token: Balance<T>,
+    fee_token: Balance<T>,
     lp_supply: Supply<LP<T>>,
   }
 
@@ -63,6 +68,7 @@ module swap::implements {
     has_paused: bool,
     pool_account: address,
     controller: address,
+    beneficiary: address,
   }
 
   /// Init global config
@@ -71,7 +77,8 @@ module swap::implements {
       id: object::new(ctx),
       has_paused: false,
       pool_account: tx_context::sender(ctx),
-      controller: @controller
+      controller: @controller,
+      beneficiary: @beneficiary
     };
 
     transfer::share_object(global)
@@ -109,6 +116,10 @@ module swap::implements {
     global.controller
   }
 
+  public(friend) fun beneficiary(global: &Global):address {
+    global.beneficiary
+  }
+
   /// Create Sui-T pool
   public fun create_pool<T>(
     global: &Global,
@@ -132,10 +143,12 @@ module swap::implements {
 
     transfer::share_object(Pool {
       id: pool_uid,
-      token: coin::into_balance(token),
+      global: object::uid_to_inner(&global.id),
       sui: coin::into_balance(sui),
+      fee_sui: balance::zero<SUI>(),
+      token: coin::into_balance(token),
+      fee_token: balance::zero<T>(),
       lp_supply,
-      global: object::uid_to_inner(&global.id)
     });
 
     (coin::from_balance(lp, ctx), pool_id)
@@ -252,6 +265,8 @@ module swap::implements {
     assert!(sui_reserve > 0 && token_reserve > 0, ERR_RESERVES_EMPTY);
 
     let sui_in = balance::value(&sui_balance);
+    let sui_fee = get_fee(sui_in);
+
     let token_out = get_amount_out(
       sui_in,
       sui_reserve,
@@ -263,6 +278,7 @@ module swap::implements {
       ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM
     );
 
+    balance::join(&mut pool.fee_sui, balance::split(&mut sui_balance, sui_fee));
     balance::join(&mut pool.sui, sui_balance);
 
     let return_values = vector::empty<u64>();
@@ -290,6 +306,8 @@ module swap::implements {
     assert!(sui_reserve > 0 && token_reserve > 0, ERR_RESERVES_EMPTY);
 
     let token_in = balance::value(&token_balance);
+    let token_fee = get_fee(token_in);
+
     let sui_out = get_amount_out(
       token_in,
       token_reserve,
@@ -301,6 +319,7 @@ module swap::implements {
       ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM
     );
 
+    balance::join(&mut pool.fee_token, balance::split(&mut token_balance, token_fee));
     balance::join(&mut pool.token, token_balance);
 
     let return_values = vector::empty<u64>();
@@ -365,6 +384,13 @@ module swap::implements {
     )
   }
 
+  /// Calculate the fee
+  public fun get_fee(
+    coin_in: u64,
+  ): u64 {
+    mul_div(coin_in, FEE_MULTIPLIER, FEE_SCALE)
+  }
+
   /// Calculate the output amount minus the fee - 0.3%
   public fun get_amount_out(
     coin_in: u64,
@@ -384,6 +410,26 @@ module swap::implements {
       reserve_out,
       new_reserve_in  // scaled to 1000
     )
+  }
+
+  /// Withdraw the fee coins
+  public fun withdraw<T>(
+    pool: &mut Pool<T>,
+    ctx: &mut TxContext
+  ): (Coin<SUI>, Coin<T>, u64, u64) {
+    let sui_fee = balance::value(&pool.fee_sui);
+    let token_fee = balance::value(&pool.fee_token);
+
+    let fee_sui = coin::from_balance(
+      balance::split(&mut pool.fee_sui, sui_fee),
+      ctx
+    );
+    let fee_token = coin::from_balance(
+      balance::split(&mut pool.fee_token, token_fee),
+      ctx
+    );
+
+    (fee_sui, fee_token, sui_fee, token_fee)
   }
 
   #[test_only]

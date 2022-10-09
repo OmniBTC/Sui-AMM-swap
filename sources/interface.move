@@ -86,7 +86,7 @@ module swap::interface {
     }
 
     /// Entrypoint for the `remove_liquidity` method. Transfers
-    /// withdrawn assets to the sender.
+    /// withdrew assets to the sender.
     public entry fun remove_liquidity<T>(
         global: &Global,
         pool: &mut Pool<T>,
