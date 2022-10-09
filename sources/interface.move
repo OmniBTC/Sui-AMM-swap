@@ -22,8 +22,8 @@ module swap::interface {
     ///  liquidity = sqrt( X * Y )
     public entry fun create_pool<T>(
         global: &Global,
-        token: Coin<T>,
         sui: Coin<SUI>,
+        token: Coin<T>,
         ctx: &mut TxContext
     ) {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
@@ -33,8 +33,8 @@ module swap::interface {
 
         let (lp, pool_id)= implements::create_pool(
             global,
-            token,
             sui,
+            token,
             ctx,
         );
 

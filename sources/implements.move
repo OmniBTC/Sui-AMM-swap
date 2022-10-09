@@ -120,11 +120,11 @@ module swap::implements {
     global.beneficiary
   }
 
-  /// Create Sui-T pool
+  /// Create Sui <-> Token pool
   public fun create_pool<T>(
     global: &Global,
-    token: Coin<T>,
     sui: Coin<SUI>,
+    token: Coin<T>,
     ctx: &mut TxContext
   ): (Coin<LP<T>>, ID) {
     let sui_amount = coin::value(&sui);

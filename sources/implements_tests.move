@@ -1,6 +1,8 @@
 // Copyright 2022 OmniBTC Authors. Licensed under Apache-2.0 License.
 
 #[test_only]
+/// Refer to https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/pool.move#L346
+///
 /// Tests for the pool module.
 /// They are sequential and based on top of each other.
 /// ```
@@ -50,8 +52,8 @@ module swap::implements_tests {
 
             let (lp, _pool_id)= implements::create_pool(
                 global_mut,
-                mint<BEEP>(BEEP_AMOUNT, ctx(test)),
                 mint<SUI>(SUI_AMOUNT, ctx(test)),
+                mint<BEEP>(BEEP_AMOUNT, ctx(test)),
                 ctx(test)
             );
 
