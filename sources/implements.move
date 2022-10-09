@@ -25,7 +25,9 @@ module swap::implements {
   const ERR_INSUFFICIENT_SUI: u64 = 3;
   /// Insuficient amount in Token reserves.
   const ERR_INSUFFICIENT_TOKEN: u64 = 4;
+  /// Divide by zero while calling mul_div.
   const ERR_DIVIDE_BY_ZERO: u64 = 5;
+  /// For when someone add liquidity with invalid parameters.
   const ERR_OVERLIMIT_SUI: u64 = 6;
   /// Amount out less than minimum.
   const ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM: u64 = 7;
@@ -61,7 +63,7 @@ module swap::implements {
     has_paused: bool,
   }
 
-  /// init global config
+  /// Init global config
   fun init(ctx: &mut TxContext) {
     let global = Global {
       id: object::new(ctx),
@@ -107,7 +109,7 @@ module swap::implements {
     let token_amount = coin::value(&token);
 
     assert!(sui_amount > 0 && token_amount > 0, ERR_ZERO_AMOUNT);
-    assert!(sui_amount < MAX_POOL_VALUE && token_amount < MAX_POOL_VALUE, ERR_POOL_FULL);
+    assert!(sui_amount * token_amount < 10000 * MAX_POOL_VALUE, ERR_POOL_FULL);
 
     // Initial share of LP is the a * b
     let share = sui_amount * token_amount;
@@ -163,6 +165,7 @@ module swap::implements {
     );
 
     let share_minted = optimal_sui * optimal_token;
+    assert!(share_minted < 10000 * MAX_POOL_VALUE, ERR_POOL_FULL);
 
     if (optimal_sui < sui_added) {
       transfer::transfer(
