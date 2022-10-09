@@ -5,6 +5,7 @@
 /// https://github.com/MystenLabs/sui/issues/4202
 
 module swap::implements {
+  use std::vector;
   use sui::object::{Self, ID, UID};
   use sui::coin::{Self, Coin};
   use sui::balance::{Self, Supply, Balance};
@@ -78,7 +79,11 @@ module swap::implements {
     pool.global
   }
 
-  public(friend) fun id(global: &Global):ID {
+  public fun pool_id<T>(pool: &Pool<T>): ID {
+    object::uid_to_inner(&pool.id)
+  }
+
+  public(friend) fun id(global: &Global): ID {
     object::uid_to_inner(&global.id)
   }
 
@@ -104,7 +109,7 @@ module swap::implements {
     token: Coin<T>,
     sui: Coin<SUI>,
     ctx: &mut TxContext
-  ): Coin<LP<T>> {
+  ): (Coin<LP<T>>, ID) {
     let sui_amount = coin::value(&sui);
     let token_amount = coin::value(&token);
 
@@ -116,15 +121,18 @@ module swap::implements {
     let lp_supply = balance::create_supply(LP<T> {});
     let lp = balance::increase_supply(&mut lp_supply, share);
 
+    let pool_uid = object::new(ctx);
+    let pool_id = object::uid_to_inner(&pool_uid);
+
     transfer::share_object(Pool {
-      id: object::new(ctx),
+      id: pool_uid,
       token: coin::into_balance(token),
       sui: coin::into_balance(sui),
       lp_supply,
       global: object::uid_to_inner(&global.id)
     });
 
-    coin::from_balance(lp, ctx)
+    (coin::from_balance(lp, ctx), pool_id)
   }
 
   /// Add liquidity to the `Pool`. Sender needs to provide both
@@ -137,7 +145,7 @@ module swap::implements {
     token: Coin<T>,
     token_min: u64,
     ctx: &mut TxContext
-  ): Coin<LP<T>> {
+  ): (Coin<LP<T>>, vector<u64>) {
     assert!(
       coin::value(&sui) >= sui_min && sui_min > 0,
       ERR_INSUFFICIENT_SUI
@@ -187,7 +195,13 @@ module swap::implements {
     assert!(token_amount < MAX_POOL_VALUE, ERR_POOL_FULL);
 
     let balance = balance::increase_supply(&mut pool.lp_supply, share_minted);
-    coin::from_balance(balance, ctx)
+
+    let return_values = vector::empty<u64>();
+    vector::push_back(&mut return_values, optimal_sui);
+    vector::push_back(&mut return_values, optimal_token);
+    vector::push_back(&mut return_values, share_minted);
+
+    (coin::from_balance(balance, ctx), return_values)
   }
 
   /// Remove liquidity from the `Pool` by burning `Coin<LP>`.
@@ -221,7 +235,7 @@ module swap::implements {
     sui: Coin<SUI>,
     token_min: u64,
     ctx: &mut TxContext
-  ): Coin<T> {
+  ): (Coin<T>, vector<u64>){
     assert!(coin::value(&sui) > 0, ERR_ZERO_AMOUNT);
 
     let sui_balance = coin::into_balance(sui);
@@ -231,19 +245,27 @@ module swap::implements {
 
     assert!(sui_reserve > 0 && token_reserve > 0, ERR_RESERVES_EMPTY);
 
-    let token_amount = get_amount_out(
-      balance::value(&sui_balance),
+    let sui_in = balance::value(&sui_balance);
+    let token_out = get_amount_out(
+      sui_in,
       sui_reserve,
       token_reserve,
     );
 
     assert!(
-      token_amount >= token_min,
+      token_out >= token_min,
       ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM
     );
 
     balance::join(&mut pool.sui, sui_balance);
-    coin::take(&mut pool.token, token_amount, ctx)
+
+    let return_values = vector::empty<u64>();
+    vector::push_back(&mut return_values, sui_in);
+    vector::push_back(&mut return_values, 0);
+    vector::push_back(&mut return_values, 0);
+    vector::push_back(&mut return_values, token_out);
+
+    (coin::take(&mut pool.token, token_out, ctx), return_values)
   }
 
   /// Swap `Coin<T>` for the `Coin<SUI>`.
@@ -253,7 +275,7 @@ module swap::implements {
     token: Coin<T>,
     sui_min: u64,
     ctx: &mut TxContext
-  ): Coin<SUI> {
+  ): (Coin<SUI>, vector<u64>) {
     assert!(coin::value(&token) > 0, ERR_ZERO_AMOUNT);
 
     let token_balance = coin::into_balance(token);
@@ -261,19 +283,27 @@ module swap::implements {
 
     assert!(sui_reserve > 0 && token_reserve > 0, ERR_RESERVES_EMPTY);
 
-    let sui_amount = get_amount_out(
-      balance::value(&token_balance),
+    let token_in = balance::value(&token_balance);
+    let sui_out = get_amount_out(
+      token_in,
       token_reserve,
       sui_reserve,
     );
 
     assert!(
-      sui_amount >= sui_min,
+      sui_out >= sui_min,
       ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM
     );
 
     balance::join(&mut pool.token, token_balance);
-    coin::take(&mut pool.sui, sui_amount, ctx)
+
+    let return_values = vector::empty<u64>();
+    vector::push_back(&mut return_values, 0);
+    vector::push_back(&mut return_values, sui_out);
+    vector::push_back(&mut return_values, token_in);
+    vector::push_back(&mut return_values, 0);
+
+    (coin::take(&mut pool.sui, sui_out, ctx), return_values)
   }
 
   /// Calculate amounts needed for adding new liquidity for both `Sui` and `Token`.

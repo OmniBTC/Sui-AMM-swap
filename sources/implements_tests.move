@@ -48,7 +48,7 @@ module swap::implements_tests {
             let global = test_scenario::take_shared<Global>(test);
             let global_mut = test_scenario::borrow_mut(&mut global);
 
-            let lp = implements::create_pool(
+            let (lp, _pool_id)= implements::create_pool(
                 global_mut,
                 mint<BEEP>(BEEP_AMOUNT, ctx(test)),
                 mint<SUI>(SUI_AMOUNT, ctx(test)),
@@ -85,7 +85,7 @@ module swap::implements_tests {
             let pool_mut = test_scenario::borrow_mut(&mut pool);
             let (sui_amount, token_amount, lp_supply) = implements::get_amounts(pool_mut);
 
-            let lp_tokens = implements::add_liquidity(
+            let (lp_tokens, _return) = implements::add_liquidity(
                 pool_mut,
                 mint<SUI>(sui_amount, ctx(test)),
                 1,
@@ -112,7 +112,7 @@ module swap::implements_tests {
             let pool = test_scenario::take_shared<Pool<BEEP>>(test);
             let pool_mut = test_scenario::borrow_mut(&mut pool);
 
-            let token = implements::swap_sui(
+            let (token, _return) = implements::swap_sui(
                 pool_mut,
                 mint<SUI>(5000000, ctx(test)),
                 0,
@@ -139,7 +139,7 @@ module swap::implements_tests {
             let pool = test_scenario::take_shared<Pool<BEEP>>(test);
             let pool_mut = test_scenario::borrow_mut(&mut pool);
 
-            let sui = implements::swap_token(
+            let (sui, _return) = implements::swap_token(
                 pool_mut,
                 mint<BEEP>(1000, ctx(test)),
                 0,
