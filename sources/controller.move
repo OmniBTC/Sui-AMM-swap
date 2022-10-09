@@ -9,13 +9,13 @@ module swap::controller {
 
   public entry fun pause(global: &mut Global, ctx: &mut TxContext){
     assert!(!implements::is_emergency(global), ERR_ALREADY_PAUSE);
-    assert!(implements::pool_account(global) == tx_context::sender(ctx), ERR_NO_PERMISSIONS);
+    assert!(implements::controller(global) == tx_context::sender(ctx), ERR_NO_PERMISSIONS);
     implements::pause(global)
   }
 
   public entry fun resume(global: &mut Global, ctx: &mut TxContext){
     assert!(implements::is_emergency(global), ERR_NOT_PAUSE);
-    assert!(implements::pool_account(global) == tx_context::sender(ctx), ERR_NO_PERMISSIONS);
+    assert!(implements::controller(global) == tx_context::sender(ctx), ERR_NO_PERMISSIONS);
     implements::resume(global)
   }
 }

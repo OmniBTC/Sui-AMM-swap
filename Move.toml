@@ -5,6 +5,7 @@ version = "1.0.0"
 [dependencies]
 #Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
 Sui = { local = "../sui/crates/sui-framework" }
+
 [addresses]
 swap =  "0x0"
-sui =  "0000000000000000000000000000000000000002"
+controller = "0x6c5e9e3f8fa9fdbf6a0dde72ec11a297b928a852"

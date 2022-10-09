@@ -60,16 +60,18 @@ module swap::implements {
   /// The global config
   struct Global has key {
     id: UID,
-    pool_account: address,
     has_paused: bool,
+    pool_account: address,
+    controller: address,
   }
 
   /// Init global config
   fun init(ctx: &mut TxContext) {
     let global = Global {
       id: object::new(ctx),
-      pool_account: tx_context::sender(ctx),
       has_paused: false,
+      pool_account: tx_context::sender(ctx),
+      controller: @controller
     };
 
     transfer::share_object(global)
@@ -101,6 +103,10 @@ module swap::implements {
 
   public(friend) fun pool_account(global: &Global):address {
     global.pool_account
+  }
+
+  public(friend) fun controller(global: &Global):address {
+    global.controller
   }
 
   /// Create Sui-T pool
