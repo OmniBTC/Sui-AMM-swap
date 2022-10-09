@@ -1,3 +1,4 @@
+// Copyright 2022 OmniBTC Authors. Licensed under Apache-2.0 License.
 module swap::interface {
     use sui::coin::Coin;
     use sui::sui::SUI;
