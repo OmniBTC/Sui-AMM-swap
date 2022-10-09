@@ -1,8 +1,9 @@
 module swap::beneficiary {
-    use sui::tx_context::{Self, TxContext};
     use sui::transfer;
-    use swap::implements::{Self, Global, Pool};
+    use sui::tx_context::{Self, TxContext};
+
     use swap::event::withdrew_event;
+    use swap::implements::{Self, Global, Pool};
 
     const ERR_NO_PERMISSIONS: u64 = 301;
     const ERR_EMERGENCY: u64 = 302;
@@ -14,7 +15,7 @@ module swap::beneficiary {
         global: &mut Global,
         pool: &mut Pool<T>,
         ctx: &mut TxContext
-    ){
+    ) {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
         let global_id = implements::global_id(pool);
         let pool_id = implements::pool_id(pool);

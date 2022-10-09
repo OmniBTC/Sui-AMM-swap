@@ -1,14 +1,14 @@
 // Copyright 2022 OmniBTC Authors. Licensed under Apache-2.0 License.
 module swap::interface {
     use std::vector;
+
     use sui::coin::{Coin, value};
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+
+    use swap::event::{added_event, created_event, removed_event, swapped_event};
     use swap::implements::{Self, Global, LP, Pool};
-    use swap::event::{
-        added_event, created_event, removed_event, swapped_event
-    };
 
     const ERR_NO_PERMISSIONS: u64 = 101;
     const ERR_EMERGENCY: u64 = 102;
@@ -31,7 +31,7 @@ module swap::interface {
 
         let global_id = implements::id(global);
 
-        let (lp, pool_id)= implements::create_pool(
+        let (lp, pool_id) = implements::create_pool(
             global,
             sui,
             token,

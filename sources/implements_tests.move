@@ -14,9 +14,10 @@
 /// |               +-- test_withdraw_all
 /// ```
 module swap::implements_tests {
-    use sui::sui::SUI;
     use sui::coin::{mint_for_testing as mint, destroy_for_testing as burn};
+    use sui::sui::SUI;
     use sui::test_scenario::{Self, Scenario, next_tx, ctx};
+
     use swap::implements::{Self, Pool, LP, Global};
 
     /// Gonna be our test token.
@@ -27,10 +28,15 @@ module swap::implements_tests {
 
     // Tests section
     #[test] fun test_init_pool() { test_init_pool_(&mut scenario()) }
+
     #[test] fun test_add_liquidity() { test_add_liquidity_(&mut scenario()) }
+
     #[test] fun test_swap_sui() { test_swap_sui_(&mut scenario()) }
+
     #[test] fun test_swap_token() { test_swap_token_(&mut scenario()) }
+
     #[test] fun test_withdraw_almost_all() { test_withdraw_almost_all_(&mut scenario()) }
+
     #[test] fun test_withdraw_all() { test_withdraw_all_(&mut scenario()) }
 
     // Non-sequential tests
@@ -42,15 +48,17 @@ module swap::implements_tests {
     fun test_init_pool_(test: &mut Scenario) {
         let (owner, _) = people();
 
-        next_tx(test, &owner); {
+        next_tx(test, &owner);
+        {
             implements::init_for_testing(ctx(test));
         };
 
-        next_tx(test, &owner); {
+        next_tx(test, &owner);
+        {
             let global = test_scenario::take_shared<Global>(test);
             let global_mut = test_scenario::borrow_mut(&mut global);
 
-            let (lp, _pool_id)= implements::create_pool(
+            let (lp, _pool_id) = implements::create_pool(
                 global_mut,
                 mint<SUI>(SUI_AMOUNT, ctx(test)),
                 mint<BEEP>(BEEP_AMOUNT, ctx(test)),
@@ -63,7 +71,8 @@ module swap::implements_tests {
             test_scenario::return_shared(test, global)
         };
 
-        next_tx(test, &owner); {
+        next_tx(test, &owner);
+        {
             let pool = test_scenario::take_shared<Pool<BEEP>>(test);
             let pool_mut = test_scenario::borrow_mut(&mut pool);
             let (sui_amount, token_amount, lp_supply) = implements::get_amounts(pool_mut);
@@ -82,7 +91,8 @@ module swap::implements_tests {
 
         let (_, theguy) = people();
 
-        next_tx(test, &theguy); {
+        next_tx(test, &theguy);
+        {
             let pool = test_scenario::take_shared<Pool<BEEP>>(test);
             let pool_mut = test_scenario::borrow_mut(&mut pool);
             let (sui_amount, token_amount, lp_supply) = implements::get_amounts(pool_mut);
@@ -110,7 +120,8 @@ module swap::implements_tests {
 
         let (_, the_guy) = people();
 
-        next_tx(test, &the_guy); {
+        next_tx(test, &the_guy);
+        {
             let pool = test_scenario::take_shared<Pool<BEEP>>(test);
             let pool_mut = test_scenario::borrow_mut(&mut pool);
 
@@ -137,7 +148,8 @@ module swap::implements_tests {
 
         let (owner, _) = people();
 
-        next_tx(test, &owner); {
+        next_tx(test, &owner);
+        {
             let pool = test_scenario::take_shared<Pool<BEEP>>(test);
             let pool_mut = test_scenario::borrow_mut(&mut pool);
 
@@ -162,8 +174,9 @@ module swap::implements_tests {
         let (owner, _) = people();
 
         // someone tries to pass MINTED_LSP and hopes there will be just 1 BEEP
-        next_tx(test, &owner); {
-            let lp = mint<LP<BEEP>>(1000000000000000-1, ctx(test));
+        next_tx(test, &owner);
+        {
+            let lp = mint<LP<BEEP>>(1000000000000000 - 1, ctx(test));
             let pool = test_scenario::take_shared<Pool<BEEP>>(test);
             let pool_mut = test_scenario::borrow_mut(&mut pool);
 
@@ -187,7 +200,8 @@ module swap::implements_tests {
 
         let (owner, _) = people();
 
-        next_tx(test, &owner); {
+        next_tx(test, &owner);
+        {
             let lp = mint<LP<BEEP>>(1000000000000000, ctx(test));
             let pool = test_scenario::take_shared<Pool<BEEP>>(test);
             let pool_mut = test_scenario::borrow_mut(&mut pool);
@@ -225,12 +239,13 @@ module swap::implements_tests {
         assert!(implements::get_amount_out(10, 1000, 1000) == 9, implements::get_amount_out(10, 1000, 1000));
 
         // Even with 0 comission there's this small loss of 1
-        assert!(implements::get_amount_out(10000, max_val , max_val) == 9969, implements::get_amount_out(10000, max_val, max_val));
+        assert!(implements::get_amount_out(10000, max_val, max_val) == 9969, implements::get_amount_out(10000, max_val, max_val));
         assert!(implements::get_amount_out(1000, max_val, max_val) == 996, implements::get_amount_out(1000, max_val, max_val));
         assert!(implements::get_amount_out(100, max_val, max_val) == 99, implements::get_amount_out(100, max_val, max_val));
     }
 
     // utilities
     fun scenario(): Scenario { test_scenario::begin(&@0x1) }
+
     fun people(): (address, address) { (@0xBEEF, @0x1337) }
 }

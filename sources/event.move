@@ -63,7 +63,7 @@ module swap::event {
         sui_val: u64,
         token_val: u64,
         lp_tokens: u64
-    ){
+    ) {
         emit(
             AddedEvent<T> {
                 global,
@@ -81,7 +81,7 @@ module swap::event {
         sui_val: u64,
         token_val: u64,
         lp_tokens: u64
-    ){
+    ) {
         emit(
             RemovedEvent<T> {
                 global,
