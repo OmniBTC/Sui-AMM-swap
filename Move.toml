@@ -8,5 +8,5 @@ Sui = { local = "../sui/crates/sui-framework" }
 
 [addresses]
 swap =  "0x0"
-controller = "0x6c5e9e3f8fa9fdbf6a0dde72ec11a297b928a852"
-beneficiary = "0x6c5e9e3f8fa9fdbf6a0dde72ec11a297b928a852"
+controller = "0x82d770bab2d607b919f2dcc45a7491ede65fe6db"
+beneficiary = "0x82d770bab2d607b919f2dcc45a7491ede65fe6db"
