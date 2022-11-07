@@ -25,6 +25,7 @@ module swap::implements_tests {
 
     const SUI_AMOUNT: u64 = 1000000000;
     const BEEP_AMOUNT: u64 = 1000000;
+    const MINIMAL_LIQUIDITY: u64 = 1000;
 
     // Tests section
     #[test]
@@ -100,7 +101,7 @@ module swap::implements_tests {
             );
 
             let burn = burn(lp);
-            assert!(burn == 1000000000000000, burn);
+            assert!(burn == 31621000, burn);
 
             test_scenario::return_shared(global)
         };
@@ -110,7 +111,7 @@ module swap::implements_tests {
             let pool = test_scenario::take_shared<Pool<BEEP>>(test);
             let (sui_amount, token_amount, lp_supply) = implements::get_amounts(&mut pool);
 
-            assert!(lp_supply == 1000000000000000, lp_supply);
+            assert!(lp_supply == 31621000, lp_supply);
             assert!(sui_amount == SUI_AMOUNT, 0);
             assert!(token_amount == BEEP_AMOUNT, 0);
 
@@ -139,7 +140,7 @@ module swap::implements_tests {
             );
 
             let burn = burn(lp_tokens);
-            assert!(burn == lp_supply, burn);
+            assert!(burn == lp_supply + MINIMAL_LIQUIDITY, burn);
 
             test_scenario::return_shared(pool)
         };
@@ -206,15 +207,15 @@ module swap::implements_tests {
         // someone tries to pass MINTED_LSP and hopes there will be just 1 BEEP
         next_tx(test, owner);
         {
-            let lp = mint<LP<BEEP>>(1000000000000000 - 1, ctx(test));
+            let lp = mint<LP<BEEP>>(31621000, ctx(test));
             let pool = test_scenario::take_shared<Pool<BEEP>>(test);
 
             let (sui, token) = implements::remove_liquidity(&mut pool, lp, ctx(test));
             let (sui_reserve, token_reserve, lp_supply) = implements::get_amounts(&mut pool);
 
-            assert!(lp_supply == 1, 3);
-            assert!(token_reserve > 0, 3); // actually 1 BEEP is left
-            assert!(sui_reserve > 0, 3);
+            assert!(lp_supply == 0, lp_supply);
+            assert!(token_reserve == 0, token_reserve); // actually 1 BEEP is left
+            assert!(sui_reserve == 0, sui_reserve);
 
             burn(sui);
             burn(token);
@@ -231,15 +232,15 @@ module swap::implements_tests {
 
         next_tx(test, owner);
         {
-            let lp = mint<LP<BEEP>>(1000000000000000, ctx(test));
+            let lp = mint<LP<BEEP>>(31621000, ctx(test));
             let pool = test_scenario::take_shared<Pool<BEEP>>(test);
 
             let (sui, token) = implements::remove_liquidity(&mut pool, lp, ctx(test));
             let (sui_reserve, token_reserve, lp_supply) = implements::get_amounts(&mut pool);
+            assert!(lp_supply == 0, lp_supply);
+            assert!(sui_reserve == 0, sui_reserve);
+            assert!(token_reserve == 0, token_reserve);
 
-            assert!(sui_reserve == 0, 3);
-            assert!(token_reserve == 0, 3);
-            assert!(lp_supply == 0, 3);
 
             let (sui_fee, token_fee, fee_sui, fee_token) = implements::withdraw<BEEP>(&mut pool, ctx(test));
 

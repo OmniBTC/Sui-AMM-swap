@@ -14,6 +14,7 @@ module swap::implements {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
+    use swap::math;
     friend swap::beneficiary;
     friend swap::controller;
     friend swap::interface;
@@ -34,6 +35,8 @@ module swap::implements {
     const ERR_OVERLIMIT_SUI: u64 = 6;
     /// Amount out less than minimum.
     const ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM: u64 = 7;
+    /// Liquid not enough.
+    const ERR_LIQUID_NOT_ENOUGH: u64 = 8;
 
 
     /// Current fee is 0.3%
@@ -45,6 +48,8 @@ module swap::implements {
     const MAX_POOL_VALUE: u64 = {
         18446744073709551615 / 10000
     };
+    /// Minimal liquidity.
+    const MINIMAL_LIQUIDITY: u64 = 1000;
 
     /// The Pool token that will be used to mark the pool share
     /// of a liquidity provider. The parameter `T` is for the
@@ -134,10 +139,12 @@ module swap::implements {
         assert!(sui_amount > 0 && token_amount > 0, ERR_ZERO_AMOUNT);
         assert!(sui_amount * token_amount < 10000 * MAX_POOL_VALUE, ERR_POOL_FULL);
 
-        // Initial share of LP is the a * b
-        let share = sui_amount * token_amount;
+        // Initial LP is the sqrt(a) * sqrt(b) - MINIMAL_LIQUIDITY
+        let initial_liq = math::sqrt(sui_amount) * math::sqrt(token_amount);
+        assert!(initial_liq > MINIMAL_LIQUIDITY, ERR_LIQUID_NOT_ENOUGH);
+
         let lp_supply = balance::create_supply(LP<T> {});
-        let lp = balance::increase_supply(&mut lp_supply, share);
+        let lp = balance::increase_supply(&mut lp_supply, initial_liq - MINIMAL_LIQUIDITY);
 
         let pool_uid = object::new(ctx);
         let pool_id = object::uid_to_inner(&pool_uid);
@@ -192,7 +199,7 @@ module swap::implements {
             token_reserve
         );
 
-        let share_minted = optimal_sui * optimal_token;
+        let share_minted = math::sqrt(optimal_sui) * math::sqrt(optimal_token);
         assert!(share_minted < 10000 * MAX_POOL_VALUE, ERR_POOL_FULL);
 
         if (optimal_sui < sui_added) {
@@ -237,8 +244,8 @@ module swap::implements {
         assert!(lp_amount > 0, ERR_ZERO_AMOUNT);
 
         let (sui_amount, token_amount, lp_supply) = get_amounts(pool);
-        let sui_removed = mul_div(sui_amount, lp_amount, lp_supply);
-        let token_removed = mul_div(token_amount, lp_amount, lp_supply);
+        let sui_removed = math::mul_div(sui_amount, lp_amount, lp_supply);
+        let token_removed = math::mul_div(token_amount, lp_amount, lp_supply);
 
         balance::decrease_supply(&mut pool.lp_supply, coin::into_balance(lp));
 
@@ -345,24 +352,17 @@ module swap::implements {
         if (sui_reserve == 0 && token_reserve == 0) {
             return (sui_desired, token_desired)
         } else {
-            let token_returned = mul_div(sui_desired, token_reserve, sui_reserve);
+            let token_returned = math::mul_div(sui_desired, token_reserve, sui_reserve);
             if (token_returned <= token_desired) {
                 assert!(token_returned >= token_min, ERR_INSUFFICIENT_TOKEN);
                 return (sui_desired, token_returned)
             } else {
-                let sui_returned = mul_div(token_desired, token_reserve, sui_reserve);
+                let sui_returned = math::mul_div(token_desired, token_reserve, sui_reserve);
                 assert!(sui_returned <= sui_desired, ERR_OVERLIMIT_SUI);
                 assert!(sui_returned >= sui_min, ERR_INSUFFICIENT_SUI);
                 return (sui_returned, token_desired)
             }
         }
-    }
-
-    /// Implements: `x` * `y` / `z`.
-    public fun mul_div(x: u64, y: u64, z: u64): u64 {
-        assert!(z != 0, ERR_DIVIDE_BY_ZERO);
-        let r = (x as u128) * (y as u128) / (z as u128);
-        (r as u64)
     }
 
     /// Public getter for the price of SUI or Token T.
@@ -389,7 +389,7 @@ module swap::implements {
     public fun get_fee(
         coin_in: u64,
     ): u64 {
-        mul_div(coin_in, FEE_MULTIPLIER, FEE_SCALE)
+        math::mul_div(coin_in, FEE_MULTIPLIER, FEE_SCALE)
     }
 
     /// Calculate the output amount minus the fee - 0.3%
@@ -407,7 +407,7 @@ module swap::implements {
         // Multiply coin_in by the current exchange rate:
         // current_exchange_rate = reserve_out / reserve_in
         // amount_in_after_fees * current_exchange_rate -> amount_out
-        mul_div(coin_in_val_after_fees, // scaled to 1000
+        math::mul_div(coin_in_val_after_fees, // scaled to 1000
             reserve_out,
             new_reserve_in  // scaled to 1000
         )
