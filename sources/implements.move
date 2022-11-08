@@ -1,20 +1,20 @@
 // Copyright 2022 OmniBTC Authors. Licensed under Apache-2.0 License.
-
-/// TODO: Refactor after dealing with these issues
-/// https://github.com/MystenLabs/sui/issues/4894
-/// https://github.com/MystenLabs/sui/issues/4202
-
 module swap::implements {
+    use std::ascii::into_bytes;
+    use std::string::{Self, String};
+    use std::type_name::{get, into_string};
     use std::vector;
 
+    use sui::bag::{Self, Bag};
     use sui::balance::{Self, Supply, Balance};
     use sui::coin::{Self, Coin};
     use sui::object::{Self, ID, UID};
-    use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
+    use swap::comparator;
     use swap::math;
+
     friend swap::beneficiary;
     friend swap::controller;
     friend swap::interface;
@@ -25,18 +25,26 @@ module swap::implements {
     const ERR_RESERVES_EMPTY: u64 = 1;
     /// For when someone attempts to add more liquidity than u128 Math allows.
     const ERR_POOL_FULL: u64 = 2;
-    /// Insuficient amount in Sui reserves.
-    const ERR_INSUFFICIENT_SUI: u64 = 3;
-    /// Insuficient amount in Token reserves.
-    const ERR_INSUFFICIENT_TOKEN: u64 = 4;
+    /// Insuficient amount in coin x reserves.
+    const ERR_INSUFFICIENT_COIN_X: u64 = 3;
+    /// Insuficient amount in coin y reserves.
+    const ERR_INSUFFICIENT_COIN_Y: u64 = 4;
     /// Divide by zero while calling mul_div.
     const ERR_DIVIDE_BY_ZERO: u64 = 5;
     /// For when someone add liquidity with invalid parameters.
-    const ERR_OVERLIMIT_SUI: u64 = 6;
+    const ERR_OVERLIMIT: u64 = 6;
     /// Amount out less than minimum.
     const ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM: u64 = 7;
     /// Liquid not enough.
     const ERR_LIQUID_NOT_ENOUGH: u64 = 8;
+    /// Coin X is the same as Coin Y
+    const ERR_THE_SAME_COIN: u64 = 9;
+    /// Pool X-Y has registered
+    const ERR_POOL_HAS_REGISTERED: u64 = 10;
+    /// Pool X-Y not register
+    const ERR_POOL_NOT_REGISTER: u64 = 11;
+    /// Coin X and Coin Y order
+    const ERR_MUST_BE_ORDER: u64 = 12;
 
 
     /// Current fee is 0.3%
@@ -52,20 +60,18 @@ module swap::implements {
     const MINIMAL_LIQUIDITY: u64 = 1000;
 
     /// The Pool token that will be used to mark the pool share
-    /// of a liquidity provider. The parameter `T` is for the
+    /// of a liquidity provider. The parameter `X` and `Y` is for the
     /// coin held in the pool.
-    /// eg. LP<Token> is SUI-Token pair.
-    struct LP<phantom T> has drop {}
+    struct LP<phantom X, phantom Y> has drop, store {}
 
     /// The pool with exchange.
-    struct Pool<phantom T> has key {
-        id: UID,
+    struct Pool<phantom X, phantom Y> has store {
         global: ID,
-        sui: Balance<SUI>,
-        fee_sui: Balance<SUI>,
-        token: Balance<T>,
-        fee_token: Balance<T>,
-        lp_supply: Supply<LP<T>>,
+        coin_x: Balance<X>,
+        fee_coin_x: Balance<X>,
+        coin_y: Balance<Y>,
+        fee_coin_y: Balance<Y>,
+        lp_supply: Supply<LP<X, Y>>,
     }
 
     /// The global config
@@ -75,6 +81,7 @@ module swap::implements {
         pool_account: address,
         controller: address,
         beneficiary: address,
+        pools: Bag,
     }
 
     /// Init global config
@@ -84,22 +91,38 @@ module swap::implements {
             has_paused: false,
             pool_account: tx_context::sender(ctx),
             controller: @controller,
-            beneficiary: @beneficiary
+            beneficiary: @beneficiary,
+            pools: bag::new(ctx)
         };
 
         transfer::share_object(global)
     }
 
-    public fun global_id<T>(pool: &Pool<T>): ID {
+    public fun global_id<X, Y>(pool: &Pool<X, Y>): ID {
         pool.global
     }
 
-    public fun pool_id<T>(pool: &Pool<T>): ID {
-        object::uid_to_inner(&pool.id)
+    public(friend) fun id<X, Y>(global: &Global): ID {
+        object::uid_to_inner(&global.id)
     }
 
-    public(friend) fun id(global: &Global): ID {
-        object::uid_to_inner(&global.id)
+    public(friend) fun get_mut_pool<X, Y>(
+        global: &mut Global
+    ): &mut Pool<X, Y> {
+        assert!(is_order<X, Y>(), ERR_MUST_BE_ORDER);
+
+        let lp_name = generate_lp_name<X, Y>();
+        let has_registered = bag::contains_with_type<String, Pool<X, Y>>(&global.pools, lp_name);
+        assert!(has_registered, ERR_POOL_NOT_REGISTER);
+
+        bag::borrow_mut<String, Pool<X, Y>>(&mut global.pools, lp_name)
+    }
+
+    public(friend) fun has_registered<X, Y>(
+        global: &Global
+    ): bool {
+        let lp_name = generate_lp_name<X, Y>();
+        bag::contains_with_type<String, Pool<X, Y>>(&global.pools, lp_name)
     }
 
     public(friend) fun pause(global: &mut Global) {
@@ -126,261 +149,254 @@ module swap::implements {
         global.beneficiary
     }
 
-    /// Create Sui <-> Token pool
-    public fun create_pool<T>(
-        global: &Global,
-        sui: Coin<SUI>,
-        token: Coin<T>,
-        ctx: &mut TxContext
-    ): (Coin<LP<T>>, ID) {
-        let sui_amount = coin::value(&sui);
-        let token_amount = coin::value(&token);
+    public fun generate_lp_name<X, Y>(): String {
+        let lp_name = string::utf8(b"");
+        string::append_utf8(&mut lp_name, b"LP-");
 
-        assert!(sui_amount > 0 && token_amount > 0, ERR_ZERO_AMOUNT);
-        assert!(sui_amount * token_amount < 10000 * MAX_POOL_VALUE, ERR_POOL_FULL);
+        if (is_order<X, Y>()) {
+            string::append_utf8(&mut lp_name, into_bytes(into_string(get<X>())));
+            string::append_utf8(&mut lp_name, b"-");
+            string::append_utf8(&mut lp_name, into_bytes(into_string(get<Y>())));
+        } else {
+            string::append_utf8(&mut lp_name, into_bytes(into_string(get<Y>())));
+            string::append_utf8(&mut lp_name, b"-");
+            string::append_utf8(&mut lp_name, into_bytes(into_string(get<X>())));
+        };
 
-        // Initial LP is the sqrt(a) * sqrt(b) - MINIMAL_LIQUIDITY
-        let initial_liq = math::sqrt(sui_amount) * math::sqrt(token_amount);
-        assert!(initial_liq > MINIMAL_LIQUIDITY, ERR_LIQUID_NOT_ENOUGH);
+        lp_name
+    }
 
-        let lp_supply = balance::create_supply(LP<T> {});
-        let lp = balance::increase_supply(&mut lp_supply, initial_liq - MINIMAL_LIQUIDITY);
+    public(friend) fun is_order<X, Y>(): bool {
+        let comp = comparator::compare(&get<X>(), &get<Y>());
+        assert!(!comparator::is_equal(&comp), ERR_THE_SAME_COIN);
 
-        let pool_uid = object::new(ctx);
-        let pool_id = object::uid_to_inner(&pool_uid);
+        if (comparator::is_smaller_than(&comp)) {
+            true
+        } else {
+            false
+        }
+    }
 
-        transfer::share_object(Pool {
-            id: pool_uid,
+    /// Register pool
+    public(friend) fun register_pool<X, Y>(
+        global: &mut Global,
+    ) {
+        assert!(is_order<X, Y>(), ERR_MUST_BE_ORDER);
+
+        let lp_name = generate_lp_name<X, Y>();
+        let has_registered = bag::contains_with_type<String, Pool<X, Y>>(&global.pools, lp_name);
+        assert!(!has_registered, ERR_POOL_HAS_REGISTERED);
+
+        let lp_supply = balance::create_supply(LP<X, Y> {});
+        let new_pool = Pool {
             global: object::uid_to_inner(&global.id),
-            sui: coin::into_balance(sui),
-            fee_sui: balance::zero<SUI>(),
-            token: coin::into_balance(token),
-            fee_token: balance::zero<T>(),
+            coin_x: balance::zero<X>(),
+            fee_coin_x: balance::zero<X>(),
+            coin_y: balance::zero<Y>(),
+            fee_coin_y: balance::zero<Y>(),
             lp_supply,
-        });
-
-        (coin::from_balance(lp, ctx), pool_id)
+        };
+        bag::add(&mut global.pools, lp_name, new_pool);
     }
 
     /// Add liquidity to the `Pool`. Sender needs to provide both
-    /// `Coin<SUI>` and `Coin<T>`, and in exchange he gets `Coin<LP>` -
+    /// `Coin<X>` and `Coin<Y>`, and in exchange he gets `Coin<LP>` -
     /// liquidity provider tokens.
-    public fun add_liquidity<T>(
-        pool: &mut Pool<T>,
-        sui: Coin<SUI>,
-        sui_min: u64,
-        token: Coin<T>,
-        token_min: u64,
+    public(friend) fun add_liquidity<X, Y>(
+        pool: &mut Pool<X, Y>,
+        coin_x: Coin<X>,
+        coin_x_min: u64,
+        coin_y: Coin<Y>,
+        coin_y_min: u64,
         ctx: &mut TxContext
-    ): (Coin<LP<T>>, vector<u64>) {
-        assert!(
-            coin::value(&sui) >= sui_min && sui_min > 0,
-            ERR_INSUFFICIENT_SUI
-        );
-        assert!(
-            coin::value(&token) >= token_min && token_min > 0,
-            ERR_INSUFFICIENT_TOKEN
-        );
+    ): (Coin<LP<X, Y>>, vector<u64>) {
+        assert!(is_order<X, Y>(), ERR_MUST_BE_ORDER);
 
-        let sui_balance = coin::into_balance(sui);
-        let token_balance = coin::into_balance(token);
+        let coin_x_value = coin::value(&coin_x);
+        let coin_y_value = coin::value(&coin_y);
 
-        let (sui_reserve, token_reserve, _lp_supply) = get_amounts(pool);
+        assert!(coin_x_value >= coin_x_min && coin_x_min > 0, ERR_INSUFFICIENT_COIN_X);
+        assert!(coin_y_value >= coin_y_min && coin_y_min > 0, ERR_INSUFFICIENT_COIN_Y);
+        assert!(coin_x_value * coin_y_value < 10000 * MAX_POOL_VALUE, ERR_POOL_FULL);
 
-        let sui_added = balance::value(&sui_balance);
-        let token_added = balance::value(&token_balance);
+        let coin_x_balance = coin::into_balance(coin_x);
+        let coin_y_balance = coin::into_balance(coin_y);
 
-        let (optimal_sui, optimal_token) = calc_optimal_coin_values(
-            sui_added,
-            token_added,
-            sui_min,
-            token_min,
-            sui_reserve,
-            token_reserve
+        let (coin_x_reserve, coin_y_reserve, lp_supply) = get_reserves_size(pool);
+        let (optimal_coin_x, optimal_coin_y) = calc_optimal_coin_values(
+            coin_x_value,
+            coin_y_value,
+            coin_x_min,
+            coin_y_min,
+            coin_x_reserve,
+            coin_y_reserve
         );
 
-        let share_minted = math::sqrt(optimal_sui) * math::sqrt(optimal_token);
-        assert!(share_minted < 10000 * MAX_POOL_VALUE, ERR_POOL_FULL);
+        let lp_minted = math::sqrt(optimal_coin_x) * math::sqrt(optimal_coin_y);
+        if (lp_supply == 0) {
+            assert!(lp_minted > MINIMAL_LIQUIDITY, ERR_LIQUID_NOT_ENOUGH);
+            lp_minted = lp_minted - MINIMAL_LIQUIDITY
+        };
+        assert!(lp_minted < 10000 * MAX_POOL_VALUE, ERR_POOL_FULL);
 
-        if (optimal_sui < sui_added) {
+        if (optimal_coin_x < coin_x_value) {
             transfer::transfer(
-                coin::from_balance(balance::split(&mut sui_balance, sui_added - optimal_sui), ctx),
+                coin::from_balance(balance::split(&mut coin_x_balance, coin_x_value - optimal_coin_x), ctx),
                 tx_context::sender(ctx)
             )
         };
-        if (optimal_token < token_added) {
+        if (optimal_coin_y < coin_y_value) {
             transfer::transfer(
-                coin::from_balance(balance::split(&mut token_balance, token_added - optimal_token), ctx),
+                coin::from_balance(balance::split(&mut coin_y_balance, coin_y_value - optimal_coin_y), ctx),
                 tx_context::sender(ctx)
             )
         };
 
-        let sui_amount = balance::join(&mut pool.sui, sui_balance);
-        let token_amount = balance::join(&mut pool.token, token_balance);
+        let coin_x_amount = balance::join(&mut pool.coin_x, coin_x_balance);
+        let coin_y_amount = balance::join(&mut pool.coin_y, coin_y_balance);
 
-        assert!(sui_amount < MAX_POOL_VALUE, ERR_POOL_FULL);
-        assert!(token_amount < MAX_POOL_VALUE, ERR_POOL_FULL);
+        assert!(coin_x_amount < MAX_POOL_VALUE, ERR_POOL_FULL);
+        assert!(coin_y_amount < MAX_POOL_VALUE, ERR_POOL_FULL);
 
-        let balance = balance::increase_supply(&mut pool.lp_supply, share_minted);
+        let balance = balance::increase_supply(&mut pool.lp_supply, lp_minted);
 
         let return_values = vector::empty<u64>();
-        vector::push_back(&mut return_values, optimal_sui);
-        vector::push_back(&mut return_values, optimal_token);
-        vector::push_back(&mut return_values, share_minted);
+        vector::push_back(&mut return_values, coin_x_value);
+        vector::push_back(&mut return_values, coin_y_value);
+        vector::push_back(&mut return_values, lp_minted);
 
         (coin::from_balance(balance, ctx), return_values)
     }
 
     /// Remove liquidity from the `Pool` by burning `Coin<LP>`.
-    /// Returns `Coin<T>` and `Coin<SUI>`.
-    public fun remove_liquidity<T>(
-        pool: &mut Pool<T>,
-        lp: Coin<LP<T>>,
+    /// Returns `Coin<X>` and `Coin<Y>`.
+    public(friend) fun remove_liquidity<X, Y>(
+        pool: &mut Pool<X, Y>,
+        lp_coin: Coin<LP<X, Y>>,
         ctx: &mut TxContext
-    ): (Coin<SUI>, Coin<T>) {
-        let lp_amount = coin::value(&lp);
+    ): (Coin<X>, Coin<Y>) {
+        assert!(is_order<X, Y>(), ERR_MUST_BE_ORDER);
 
-        // If there's a non-empty LP, we can
-        assert!(lp_amount > 0, ERR_ZERO_AMOUNT);
+        let lp_val = coin::value(&lp_coin);
+        assert!(lp_val > 0, ERR_ZERO_AMOUNT);
 
-        let (sui_amount, token_amount, lp_supply) = get_amounts(pool);
-        let sui_removed = math::mul_div(sui_amount, lp_amount, lp_supply);
-        let token_removed = math::mul_div(token_amount, lp_amount, lp_supply);
+        let (coin_x_amount, coin_y_amount, lp_supply) = get_reserves_size(pool);
+        let coin_x_out = math::mul_div(coin_x_amount, lp_val, lp_supply);
+        let coin_y_out = math::mul_div(coin_y_amount, lp_val, lp_supply);
 
-        balance::decrease_supply(&mut pool.lp_supply, coin::into_balance(lp));
+        balance::decrease_supply(&mut pool.lp_supply, coin::into_balance(lp_coin));
 
         (
-            coin::take(&mut pool.sui, sui_removed, ctx),
-            coin::take(&mut pool.token, token_removed, ctx)
+            coin::take(&mut pool.coin_x, coin_x_out, ctx),
+            coin::take(&mut pool.coin_y, coin_y_out, ctx)
         )
     }
 
-    /// Swap `Coin<SUI>` for the `Coin<T>`.
-    /// Returns Coin<T>.
-    public fun swap_sui<T>(
-        pool: &mut Pool<T>,
-        sui: Coin<SUI>,
-        token_min: u64,
+    /// Swap Coin<X> for Coin<Y>
+    /// Returns Coin<Y>
+    public(friend) fun swap_out<X, Y>(
+        global: &mut Global,
+        coin_in: Coin<X>,
+        coin_out_min: u64,
         ctx: &mut TxContext
-    ): (Coin<T>, vector<u64>) {
-        assert!(coin::value(&sui) > 0, ERR_ZERO_AMOUNT);
+    ): vector<u64> {
+        assert!(coin::value<X>(&coin_in) > 0, ERR_ZERO_AMOUNT);
 
-        let sui_balance = coin::into_balance(sui);
+        if (is_order<X, Y>()) {
+            let pool = get_mut_pool<X, Y>(global);
+            let (coin_x_reserve, coin_y_reserve, _lp) = get_reserves_size(pool);
+            assert!(coin_x_reserve > 0 && coin_y_reserve > 0, ERR_RESERVES_EMPTY);
+            let coin_x_in = coin::value(&coin_in);
 
-        // Calculate the output amount - fee
-        let (sui_reserve, token_reserve, _) = get_amounts(pool);
+            let coin_x_fee = get_fee(coin_x_in);
+            let coin_y_out = get_amount_out(
+                coin_x_in,
+                coin_x_reserve,
+                coin_y_reserve,
+            );
+            assert!(
+                coin_y_out >= coin_out_min,
+                ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM
+            );
 
-        assert!(sui_reserve > 0 && token_reserve > 0, ERR_RESERVES_EMPTY);
+            let coin_x_balance = coin::into_balance(coin_in);
+            balance::join(&mut pool.fee_coin_x, balance::split(&mut coin_x_balance, coin_x_fee));
+            balance::join(&mut pool.coin_x, coin_x_balance);
+            let coin_out = coin::take(&mut pool.coin_y, coin_y_out, ctx);
+            transfer::transfer(coin_out, tx_context::sender(ctx));
 
-        let sui_in = balance::value(&sui_balance);
-        let sui_fee = get_fee(sui_in);
-
-        let token_out = get_amount_out(
-            sui_in,
-            sui_reserve,
-            token_reserve,
-        );
-
-        assert!(
-            token_out >= token_min,
-            ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM
-        );
-
-        balance::join(&mut pool.fee_sui, balance::split(&mut sui_balance, sui_fee));
-        balance::join(&mut pool.sui, sui_balance);
-
-        let return_values = vector::empty<u64>();
-        vector::push_back(&mut return_values, sui_in);
-        vector::push_back(&mut return_values, 0);
-        vector::push_back(&mut return_values, 0);
-        vector::push_back(&mut return_values, token_out);
-
-        (coin::take(&mut pool.token, token_out, ctx), return_values)
-    }
-
-    /// Swap `Coin<T>` for the `Coin<SUI>`.
-    /// Returns the swapped `Coin<SUI>`.
-    public fun swap_token<T>(
-        pool: &mut Pool<T>,
-        token: Coin<T>,
-        sui_min: u64,
-        ctx: &mut TxContext
-    ): (Coin<SUI>, vector<u64>) {
-        assert!(coin::value(&token) > 0, ERR_ZERO_AMOUNT);
-
-        let token_balance = coin::into_balance(token);
-        let (sui_reserve, token_reserve, _) = get_amounts(pool);
-
-        assert!(sui_reserve > 0 && token_reserve > 0, ERR_RESERVES_EMPTY);
-
-        let token_in = balance::value(&token_balance);
-        let token_fee = get_fee(token_in);
-
-        let sui_out = get_amount_out(
-            token_in,
-            token_reserve,
-            sui_reserve,
-        );
-
-        assert!(
-            sui_out >= sui_min,
-            ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM
-        );
-
-        balance::join(&mut pool.fee_token, balance::split(&mut token_balance, token_fee));
-        balance::join(&mut pool.token, token_balance);
-
-        let return_values = vector::empty<u64>();
-        vector::push_back(&mut return_values, 0);
-        vector::push_back(&mut return_values, sui_out);
-        vector::push_back(&mut return_values, token_in);
-        vector::push_back(&mut return_values, 0);
-
-        (coin::take(&mut pool.sui, sui_out, ctx), return_values)
-    }
-
-    /// Calculate amounts needed for adding new liquidity for both `Sui` and `Token`.
-    /// Returns both `Sui` and `Token` coins amounts.
-    public fun calc_optimal_coin_values(
-        sui_desired: u64,
-        token_desired: u64,
-        sui_min: u64,
-        token_min: u64,
-        sui_reserve: u64,
-        token_reserve: u64
-    ): (u64, u64) {
-        if (sui_reserve == 0 && token_reserve == 0) {
-            return (sui_desired, token_desired)
+            let return_values = vector::empty<u64>();
+            vector::push_back(&mut return_values, coin_x_in);
+            vector::push_back(&mut return_values, 0);
+            vector::push_back(&mut return_values, 0);
+            vector::push_back(&mut return_values, coin_y_out);
+            return_values
         } else {
-            let token_returned = math::mul_div(sui_desired, token_reserve, sui_reserve);
-            if (token_returned <= token_desired) {
-                assert!(token_returned >= token_min, ERR_INSUFFICIENT_TOKEN);
-                return (sui_desired, token_returned)
+            let pool = get_mut_pool<Y, X>(global);
+            let (coin_x_reserve, coin_y_reserve, _lp) = get_reserves_size(pool);
+            assert!(coin_x_reserve > 0 && coin_y_reserve > 0, ERR_RESERVES_EMPTY);
+            let coin_y_in = coin::value(&coin_in);
+
+            let coin_y_fee = get_fee(coin_y_in);
+            let coin_x_out = get_amount_out(
+                coin_y_in,
+                coin_y_reserve,
+                coin_x_reserve,
+            );
+            assert!(
+                coin_x_out >= coin_out_min,
+                ERR_COIN_OUT_NUM_LESS_THAN_EXPECTED_MINIMUM
+            );
+
+            let coin_y_balance = coin::into_balance(coin_in);
+            balance::join(&mut pool.fee_coin_y, balance::split(&mut coin_y_balance, coin_y_fee));
+            balance::join(&mut pool.coin_y, coin_y_balance);
+            let coin_out = coin::take(&mut pool.coin_x, coin_x_out, ctx);
+            transfer::transfer(coin_out, tx_context::sender(ctx));
+
+            let return_values = vector::empty<u64>();
+            vector::push_back(&mut return_values, 0);
+            vector::push_back(&mut return_values, coin_x_out);
+            vector::push_back(&mut return_values, coin_y_in);
+            vector::push_back(&mut return_values, 0);
+            return_values
+        }
+    }
+
+    /// Calculate amounts needed for adding new liquidity for both `X` and `Y`.
+    /// Returns both `X` and `Y` coins amounts.
+    public fun calc_optimal_coin_values(
+        coin_x_desired: u64,
+        coin_y_desired: u64,
+        coin_x_min: u64,
+        coin_y_min: u64,
+        coin_x_reserve: u64,
+        coin_y_reserve: u64
+    ): (u64, u64) {
+        if (coin_x_reserve == 0 && coin_y_reserve == 0) {
+            return (coin_x_desired, coin_y_desired)
+        } else {
+            let coin_y_returned = math::mul_div(coin_x_desired, coin_x_reserve, coin_y_reserve);
+            if (coin_y_returned <= coin_y_desired) {
+                assert!(coin_y_returned >= coin_y_min, ERR_INSUFFICIENT_COIN_Y);
+                return (coin_x_desired, coin_y_returned)
             } else {
-                let sui_returned = math::mul_div(token_desired, token_reserve, sui_reserve);
-                assert!(sui_returned <= sui_desired, ERR_OVERLIMIT_SUI);
-                assert!(sui_returned >= sui_min, ERR_INSUFFICIENT_SUI);
-                return (sui_returned, token_desired)
+                let coin_x_returned = math::mul_div(coin_y_desired, coin_y_reserve, coin_x_reserve);
+                assert!(coin_x_returned <= coin_x_desired, ERR_OVERLIMIT);
+                assert!(coin_x_returned >= coin_x_min, ERR_INSUFFICIENT_COIN_X);
+                return (coin_x_returned, coin_y_desired)
             }
         }
     }
 
-    /// Public getter for the price of SUI or Token T.
-    /// - How much SUI one will get if they send `to_sell` amount of T;
-    /// - How much T one will get if they send `to_sell` amount of SUI;
-    public fun price<T>(pool: &Pool<T>, to_sell: u64): u64 {
-        let (sui_amount, token_amount, _) = get_amounts(pool);
-        get_amount_out(to_sell, token_amount, sui_amount)
-    }
-
     /// Get most used values in a handy way:
-    /// - amount of Sui
-    /// - amount of Token
-    /// - total supply of LP
-    public fun get_amounts<T>(pool: &Pool<T>): (u64, u64, u64) {
+    /// - amount of Coin<X>
+    /// - amount of Coin<Y>
+    /// - total supply of LP<X,Y>
+    public fun get_reserves_size<X, Y>(pool: &Pool<X, Y>): (u64, u64, u64) {
         (
-            balance::value(&pool.sui),
-            balance::value(&pool.token),
+            balance::value(&pool.coin_x),
+            balance::value(&pool.coin_y),
             balance::supply_value(&pool.lp_supply)
         )
     }
@@ -414,23 +430,23 @@ module swap::implements {
     }
 
     /// Withdraw the fee coins
-    public fun withdraw<T>(
-        pool: &mut Pool<T>,
+    public(friend) fun withdraw<X, Y>(
+        pool: &mut Pool<X, Y>,
         ctx: &mut TxContext
-    ): (Coin<SUI>, Coin<T>, u64, u64) {
-        let sui_fee = balance::value(&pool.fee_sui);
-        let token_fee = balance::value(&pool.fee_token);
+    ): (Coin<X>, Coin<Y>, u64, u64) {
+        let coin_x_fee = balance::value(&pool.fee_coin_x);
+        let coin_y_fee = balance::value(&pool.fee_coin_y);
 
-        let fee_sui = coin::from_balance(
-            balance::split(&mut pool.fee_sui, sui_fee),
+        let fee_coin_x = coin::from_balance(
+            balance::split(&mut pool.fee_coin_x, coin_x_fee),
             ctx
         );
-        let fee_token = coin::from_balance(
-            balance::split(&mut pool.fee_token, token_fee),
+        let fee_coin_y = coin::from_balance(
+            balance::split(&mut pool.fee_coin_y, coin_y_fee),
             ctx
         );
 
-        (fee_sui, fee_token, sui_fee, token_fee)
+        (fee_coin_x, fee_coin_y, coin_x_fee, coin_y_fee)
     }
 
     #[test_only]

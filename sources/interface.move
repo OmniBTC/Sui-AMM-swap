@@ -3,194 +3,135 @@ module swap::interface {
     use std::vector;
 
     use sui::coin::{Coin, value};
-    use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    use swap::event::{added_event, created_event, removed_event, swapped_event};
-    use swap::implements::{Self, Global, LP, Pool};
+    use swap::event::{added_event, removed_event, swapped_event};
+    use swap::implements::{Self, Global, LP};
 
     const ERR_NO_PERMISSIONS: u64 = 101;
     const ERR_EMERGENCY: u64 = 102;
     const ERR_GLOBAL_MISMATCH: u64 = 103;
     const ERR_UNEXPECTED_RETURN: u64 = 104;
 
-    /// Create new `Pool` for token `T`. Each Pool holds a `Coin<T>`
-    /// and a `Coin<SUI>`. Swaps are available in both directions.
-    ///
-    /// Share is calculated based on Uniswap's constant product formula:
-    ///  liquidity = sqrt( X * Y )
-    public entry fun create_pool<T>(
-        global: &Global,
-        sui: Coin<SUI>,
-        token: Coin<T>,
+    /// Entrypoint for the `add_liquidity` method.
+    /// Sends `LP<X,Y>` to the transaction sender.
+    public entry fun add_liquidity<X, Y>(
+        global: &mut Global,
+        coin_x: Coin<X>,
+        coin_x_min: u64,
+        coin_y: Coin<Y>,
+        coin_y_min: u64,
         ctx: &mut TxContext
     ) {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
-        assert!(implements::pool_account(global) == tx_context::sender(ctx), ERR_NO_PERMISSIONS);
 
-        let global_id = implements::id(global);
+        if (!implements::has_registered<X, Y>(global)) {
+            implements::register_pool<X, Y>(global)
+        };
+        let pool = implements::get_mut_pool<X, Y>(global);
 
-        let (lp, pool_id) = implements::create_pool(
-            global,
-            sui,
-            token,
-            ctx,
+        let (lp, return_values) = implements::add_liquidity(
+            pool,
+            coin_x,
+            coin_x_min,
+            coin_y,
+            coin_y_min,
+            ctx
         );
-
-        transfer::transfer(
-            lp,
-            tx_context::sender(ctx)
-        );
-
-        created_event<T>(
-            global_id,
-            pool_id
-        )
-    }
-
-    /// Entrypoint for the `add_liquidity` method. Sends `Coin<LSP>` to
-    /// the transaction sender.
-    public entry fun add_liquidity<T>(
-        global: &Global,
-        pool: &mut Pool<T>,
-        sui: Coin<SUI>,
-        sui_min: u64,
-        token: Coin<T>,
-        token_min: u64,
-        ctx: &mut TxContext
-    ) {
-        assert!(!implements::is_emergency(global), ERR_EMERGENCY);
-        let global_id = implements::global_id(pool);
-        let pool_id = implements::pool_id(pool);
-        assert!(global_id == implements::id(global), ERR_GLOBAL_MISMATCH);
-
-        let (lp, return_values) = implements::add_liquidity(pool, sui, sui_min, token, token_min, ctx);
         assert!(vector::length(&return_values) == 3, ERR_UNEXPECTED_RETURN);
-        let lp_tokens = vector::pop_back(&mut return_values);
-        let token_val = vector::pop_back(&mut return_values);
-        let sui_val = vector::pop_back(&mut return_values);
+
+        let lp_val = vector::pop_back(&mut return_values);
+        let coin_x_val = vector::pop_back(&mut return_values);
+        let coin_y_val = vector::pop_back(&mut return_values);
 
         transfer::transfer(
             lp,
             tx_context::sender(ctx)
         );
 
-        added_event<T>(
-            global_id,
-            pool_id,
-            sui_val,
-            token_val,
-            lp_tokens
+        let global = implements::global_id<X, Y>(pool);
+        let lp_name = implements::generate_lp_name<X, Y>();
+
+        added_event(
+            global,
+            lp_name,
+            coin_x_val,
+            coin_y_val,
+            lp_val
         )
     }
 
-    /// Entrypoint for the `remove_liquidity` method. Transfers
-    /// withdrew assets to the sender.
-    public entry fun remove_liquidity<T>(
-        global: &Global,
-        pool: &mut Pool<T>,
-        lp: Coin<LP<T>>,
+    /// Entrypoint for the `remove_liquidity` method.
+    /// Transfers Coin<X> and Coin<Y> to the sender.
+    public entry fun remove_liquidity<X, Y>(
+        global: &mut Global,
+        lp_coin: Coin<LP<X, Y>>,
         ctx: &mut TxContext
     ) {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
-        let global_id = implements::global_id(pool);
-        let pool_id = implements::pool_id(pool);
-        assert!(global_id == implements::id(global), ERR_GLOBAL_MISMATCH);
 
-        let lp_tokens = value(&lp);
-        let (sui, token) = implements::remove_liquidity(pool, lp, ctx);
-        let sui_val = value(&sui);
-        let token_val = value(&token);
+        let pool = implements::get_mut_pool<X, Y>(global);
+
+        let lp_val = value(&lp_coin);
+        let (coin_x, coin_y) = implements::remove_liquidity(pool, lp_coin, ctx);
+        let coin_x_val = value(&coin_x);
+        let coin_y_val = value(&coin_y);
 
         transfer::transfer(
-            sui,
+            coin_x,
             tx_context::sender(ctx)
         );
 
         transfer::transfer(
-            token,
+            coin_y,
             tx_context::sender(ctx)
         );
 
-        removed_event<T>(
-            global_id,
-            pool_id,
-            sui_val,
-            token_val,
-            lp_tokens
+        let global = implements::global_id<X, Y>(pool);
+        let lp_name = implements::generate_lp_name<X, Y>();
+
+        removed_event(
+            global,
+            lp_name,
+            coin_x_val,
+            coin_y_val,
+            lp_val
         )
     }
 
-    /// Entrypoint for the `swap_sui` method. Sends swapped token
-    /// to sender.
-    public entry fun swap_sui<T>(
-        global: &Global,
-        pool: &mut Pool<T>,
-        sui: Coin<SUI>,
-        token_min: u64,
+    /// Entry point for the `swap` method.
+    /// Sends swapped Coin to the sender.
+    public entry fun swap<X, Y>(
+        global: &mut Global,
+        coin_in: Coin<X>,
+        coin_out_min: u64,
         ctx: &mut TxContext
     ) {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
-        let global_id = implements::global_id(pool);
-        let pool_id = implements::pool_id(pool);
-        assert!(global_id == implements::id(global), ERR_GLOBAL_MISMATCH);
 
-        let (out_token, return_values) = implements::swap_sui(pool, sui, token_min, ctx);
-        assert!(vector::length(&return_values) == 4, ERR_UNEXPECTED_RETURN);
-        let token_out = vector::pop_back(&mut return_values);
-        let token_in = vector::pop_back(&mut return_values);
-        let sui_out = vector::pop_back(&mut return_values);
-        let sui_in = vector::pop_back(&mut return_values);
-
-        transfer::transfer(
-            out_token,
-            tx_context::sender(ctx)
+        let return_values = implements::swap_out<X, Y>(
+            global,
+            coin_in,
+            coin_out_min,
+            ctx
         );
 
-        swapped_event<T>(
-            global_id,
-            pool_id,
-            sui_in,
-            sui_out,
-            token_in,
-            token_out
-        )
-    }
+        let coin_y_out = vector::pop_back(&mut return_values);
+        let coin_y_in = vector::pop_back(&mut return_values);
+        let coin_x_out = vector::pop_back(&mut return_values);
+        let coin_x_in = vector::pop_back(&mut return_values);
 
-    /// Entry point for the `swap_token` method. Sends swapped SUI
-    /// to the sender.
-    public entry fun swap_token<T>(
-        global: &Global,
-        pool: &mut Pool<T>,
-        token: Coin<T>,
-        sui_min: u64,
-        ctx: &mut TxContext
-    ) {
-        assert!(!implements::is_emergency(global), ERR_EMERGENCY);
-        let global_id = implements::global_id(pool);
-        let pool_id = implements::pool_id(pool);
-        assert!(implements::global_id(pool) == implements::id(global), ERR_GLOBAL_MISMATCH);
+        let global = implements::id<X, Y>(global);
+        let lp_name = implements::generate_lp_name<X, Y>();
 
-        let (out_sui, return_values) = implements::swap_token(pool, token, sui_min, ctx);
-        assert!(vector::length(&return_values) == 4, ERR_UNEXPECTED_RETURN);
-        let token_out = vector::pop_back(&mut return_values);
-        let token_in = vector::pop_back(&mut return_values);
-        let sui_out = vector::pop_back(&mut return_values);
-        let sui_in = vector::pop_back(&mut return_values);
-
-        transfer::transfer(
-            out_sui,
-            tx_context::sender(ctx)
-        );
-
-        swapped_event<T>(
-            global_id,
-            pool_id,
-            sui_in,
-            sui_out,
-            token_in,
-            token_out
+        swapped_event(
+            global,
+            lp_name,
+            coin_x_in,
+            coin_x_out,
+            coin_y_in,
+            coin_y_out
         )
     }
 }
