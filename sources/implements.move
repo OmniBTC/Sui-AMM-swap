@@ -376,12 +376,12 @@ module swap::implements {
         if (coin_x_reserve == 0 && coin_y_reserve == 0) {
             return (coin_x_desired, coin_y_desired)
         } else {
-            let coin_y_returned = math::mul_div(coin_x_desired, coin_x_reserve, coin_y_reserve);
+            let coin_y_returned = math::mul_div(coin_x_desired, coin_y_reserve, coin_x_reserve);
             if (coin_y_returned <= coin_y_desired) {
                 assert!(coin_y_returned >= coin_y_min, ERR_INSUFFICIENT_COIN_Y);
                 return (coin_x_desired, coin_y_returned)
             } else {
-                let coin_x_returned = math::mul_div(coin_y_desired, coin_y_reserve, coin_x_reserve);
+                let coin_x_returned = math::mul_div(coin_y_desired, coin_x_reserve, coin_y_reserve);
                 assert!(coin_x_returned <= coin_x_desired, ERR_OVERLIMIT);
                 assert!(coin_x_returned >= coin_x_min, ERR_INSUFFICIENT_COIN_X);
                 return (coin_x_returned, coin_y_desired)
@@ -450,7 +450,79 @@ module swap::implements {
     }
 
     #[test_only]
-    public fun init_for_testing(ctx: &mut TxContext) {
+    public fun init_for_testing(
+        ctx: &mut TxContext
+    ) {
         init(ctx)
+    }
+
+    #[test_only]
+    public fun add_liquidity_for_testing<X, Y>(
+        global: &mut Global,
+        coin_x: Coin<X>,
+        coin_y: Coin<Y>,
+        ctx: &mut TxContext
+    ): (Coin<LP<X, Y>>, vector<u64>) {
+        if (!has_registered<X, Y>(global)) {
+            register_pool<X, Y>(global)
+        };
+        let pool = get_mut_pool<X, Y>(global);
+
+        add_liquidity(
+            pool,
+            coin_x,
+            1,
+            coin_y,
+            1,
+            ctx
+        )
+    }
+
+    #[test_only]
+    public fun get_mut_pool_for_testing<X, Y>(
+        global: &mut Global
+    ): &mut Pool<X, Y> {
+        get_mut_pool<X, Y>(global)
+    }
+
+    #[test_only]
+    public fun swap_for_testing<X, Y>(
+        global: &mut Global,
+        coin_in: Coin<X>,
+        coin_out_min: u64,
+        ctx: &mut TxContext
+    ): vector<u64> {
+        swap_out<X, Y>(
+            global,
+            coin_in,
+            coin_out_min,
+            ctx
+        )
+    }
+
+    #[test_only]
+    public fun remove_liquidity_for_testing<X, Y>(
+        pool: &mut Pool<X, Y>,
+        lp_coin: Coin<LP<X, Y>>,
+        ctx: &mut TxContext
+    ): (Coin<X>, Coin<Y>) {
+        remove_liquidity<X, Y>(
+            pool,
+            lp_coin,
+            ctx
+        )
+    }
+
+    #[test_only]
+    public fun withdraw_for_testing<X, Y>(
+        global: &mut Global,
+        ctx: &mut TxContext
+    ): (Coin<X>, Coin<Y>, u64, u64) {
+        let pool = get_mut_pool<X, Y>(global);
+
+        withdraw<X, Y>(
+            pool,
+            ctx
+        )
     }
 }
