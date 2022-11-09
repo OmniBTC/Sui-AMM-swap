@@ -2,9 +2,10 @@
 module swap::interface {
     use std::vector;
 
-    use sui::coin::{Coin, value};
-    use sui::transfer;
+    use sui::coin::{Coin, value, split, destroy_zero};
     use sui::tx_context::{Self, TxContext};
+    use sui::transfer;
+    use sui::pay;
 
     use swap::event::{added_event, removed_event, swapped_event};
     use swap::implements::{Self, Global, LP};
@@ -133,5 +134,85 @@ module swap::interface {
             coin_y_in,
             coin_y_out
         )
+    }
+
+    public entry fun multi_add_liquidity<X, Y>(
+        global: &mut Global,
+        coins_x: vector<Coin<X>>,
+        coins_x_value: u64,
+        coin_x_min: u64,
+        coins_y: vector<Coin<Y>>,
+        coins_y_value: u64,
+        coin_y_min: u64,
+        ctx: &mut TxContext
+    ) {
+        // 1. merge coins
+        let merged_coin_x = vector::pop_back(&mut coins_x);
+        pay::join_vec(&mut merged_coin_x, coins_x);
+        let coin_x = split(&mut merged_coin_x, coins_x_value, ctx);
+
+        let merged_coin_y = vector::pop_back(&mut coins_y);
+        pay::join_vec(&mut merged_coin_y, coins_y);
+        let coin_y = split(&mut merged_coin_y, coins_y_value, ctx);
+
+        // 2. add liquidity
+        add_liquidity<X, Y>(
+            global,
+            coin_x,
+            coin_x_min,
+            coin_y,
+            coin_y_min,
+            ctx
+        );
+
+        // 3. handle remain coins
+        if (value(&merged_coin_x) > 0) {
+            transfer::transfer(
+                merged_coin_x,
+                tx_context::sender(ctx)
+            )
+        } else {
+            destroy_zero(merged_coin_x)
+        };
+
+        if (value(&merged_coin_y) > 0) {
+            transfer::transfer(
+                merged_coin_y,
+                tx_context::sender(ctx)
+            )
+        } else {
+            destroy_zero(merged_coin_y)
+        }
+    }
+
+    public entry fun multi_swap<X, Y>(
+        global: &mut Global,
+        coins_in: vector<Coin<X>>,
+        coins_in_value: u64,
+        coin_out_min: u64,
+        ctx: &mut TxContext
+    ) {
+        // 1. merge coins
+        let merged_coins_in = vector::pop_back(&mut coins_in);
+        pay::join_vec(&mut merged_coins_in, coins_in);
+        let coin_in = split(&mut merged_coins_in, coins_in_value, ctx);
+
+        // 2. swap coin
+        swap<X, Y>(
+            global,
+            coin_in,
+            coin_out_min,
+            ctx
+        );
+
+        // 3. handle remain coin
+        if (value(&merged_coins_in) > 0) {
+            transfer::transfer(
+                merged_coins_in,
+                tx_context::sender(ctx)
+            )
+        } else {
+            destroy_zero(merged_coins_in)
+        }
     }
 }
