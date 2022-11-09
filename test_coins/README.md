@@ -4,9 +4,9 @@
 
 ```bash
 sui client publish --gas-budget 10000
-package=0x0f2105964cc96221416fd7884cda044899d09e58
-usdt_cap=0x7886a7a915869fc4e4ada771a14e02ec8133d2cf
-xbtc_cap=0x4bde68a12ccde96bd1b276dda1124679d2cbc69b
+package=0xbf2972612002f472b5bd21394b4417d75c9fe887
+usdt_cap=0x9502728a924ff02d608f3f7d907545140e6abe46
+xbtc_cap=0x6bf28d215d05ce59dbe45135f684aa7390a8d60a
 
 sui client call \
   --gas-budget 10000 \
