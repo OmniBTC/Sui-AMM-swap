@@ -215,8 +215,7 @@ module swap::implements {
         let coin_x_value = coin::value(&coin_x);
         let coin_y_value = coin::value(&coin_y);
 
-        assert!(coin_x_value >= coin_x_min && coin_x_min > 0, ERR_INSUFFICIENT_COIN_X);
-        assert!(coin_y_value >= coin_y_min && coin_y_min > 0, ERR_INSUFFICIENT_COIN_Y);
+        assert!(coin_x_value > 0 && coin_y_value > 0, ERR_ZERO_AMOUNT);
         assert!(coin_x_value * coin_y_value < 10000 * MAX_POOL_VALUE, ERR_POOL_FULL);
 
         let coin_x_balance = coin::into_balance(coin_x);
