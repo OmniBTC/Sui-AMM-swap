@@ -45,6 +45,8 @@ module swap::implements {
     const ERR_POOL_NOT_REGISTER: u64 = 11;
     /// Coin X and Coin Y order
     const ERR_MUST_BE_ORDER: u64 = 12;
+    /// Overflow for u64
+    const ERR_U64_OVERFLOW: u64 = 13;
 
 
     /// Current fee is 0.3%
@@ -58,6 +60,8 @@ module swap::implements {
     };
     /// Minimal liquidity.
     const MINIMAL_LIQUIDITY: u64 = 1000;
+    /// Max u64 value.
+    const U64_MAX: u64 = 18446744073709551615;
 
     /// The Pool token that will be used to mark the pool share
     /// of a liquidity provider. The parameter `X` and `Y` is for the
@@ -166,7 +170,7 @@ module swap::implements {
         lp_name
     }
 
-    public(friend) fun is_order<X, Y>(): bool {
+    public fun is_order<X, Y>(): bool {
         let comp = comparator::compare(&get<X>(), &get<Y>());
         assert!(!comparator::is_equal(&comp), ERR_THE_SAME_COIN);
 
@@ -216,7 +220,6 @@ module swap::implements {
         let coin_y_value = coin::value(&coin_y);
 
         assert!(coin_x_value > 0 && coin_y_value > 0, ERR_ZERO_AMOUNT);
-        assert!(coin_x_value * coin_y_value < 10000 * MAX_POOL_VALUE, ERR_POOL_FULL);
 
         let coin_x_balance = coin::into_balance(coin_x);
         let coin_y_balance = coin::into_balance(coin_y);
@@ -231,12 +234,21 @@ module swap::implements {
             coin_y_reserve
         );
 
-        let lp_minted = math::sqrt(optimal_coin_x) * math::sqrt(optimal_coin_y);
-        if (lp_supply == 0) {
-            assert!(lp_minted > MINIMAL_LIQUIDITY, ERR_LIQUID_NOT_ENOUGH);
-            lp_minted = lp_minted - MINIMAL_LIQUIDITY
+        let provided_liq = if (0 == lp_supply) {
+            let initial_liq = math::sqrt(optimal_coin_x) * math::sqrt(optimal_coin_y);
+            assert!(initial_liq > MINIMAL_LIQUIDITY, ERR_LIQUID_NOT_ENOUGH);
+            initial_liq - MINIMAL_LIQUIDITY
+        } else {
+            let x_liq = (lp_supply as u128) * (optimal_coin_x as u128) / (coin_x_reserve as u128);
+            let y_liq = (lp_supply as u128) * (optimal_coin_y as u128) / (coin_y_reserve as u128);
+            if (x_liq < y_liq) {
+                assert!(x_liq < (U64_MAX as u128), ERR_U64_OVERFLOW);
+                (x_liq as u64)
+            } else {
+                assert!(y_liq < (U64_MAX as u128), ERR_U64_OVERFLOW);
+                (y_liq as u64)
+            }
         };
-        assert!(lp_minted < 10000 * MAX_POOL_VALUE, ERR_POOL_FULL);
 
         if (optimal_coin_x < coin_x_value) {
             transfer::transfer(
@@ -257,12 +269,12 @@ module swap::implements {
         assert!(coin_x_amount < MAX_POOL_VALUE, ERR_POOL_FULL);
         assert!(coin_y_amount < MAX_POOL_VALUE, ERR_POOL_FULL);
 
-        let balance = balance::increase_supply(&mut pool.lp_supply, lp_minted);
+        let balance = balance::increase_supply(&mut pool.lp_supply, provided_liq);
 
         let return_values = vector::empty<u64>();
         vector::push_back(&mut return_values, coin_x_value);
         vector::push_back(&mut return_values, coin_y_value);
-        vector::push_back(&mut return_values, lp_minted);
+        vector::push_back(&mut return_values, provided_liq);
 
         (coin::from_balance(balance, ctx), return_values)
     }
@@ -309,7 +321,7 @@ module swap::implements {
 
             let coin_x_fee = get_fee(coin_x_in);
             let coin_y_out = get_amount_out(
-                coin_x_in,
+                coin_x_in - coin_x_fee,
                 coin_x_reserve,
                 coin_y_reserve,
             );
@@ -338,7 +350,7 @@ module swap::implements {
 
             let coin_y_fee = get_fee(coin_y_in);
             let coin_x_out = get_amount_out(
-                coin_y_in,
+                coin_y_in - coin_y_fee,
                 coin_y_reserve,
                 coin_x_reserve,
             );
@@ -409,21 +421,23 @@ module swap::implements {
 
     /// Calculate the output amount minus the fee - 0.3%
     public fun get_amount_out(
-        coin_in: u64,
+        coin_in_after_fee: u64,
         reserve_in: u64,
         reserve_out: u64,
     ): u64 {
         let fee_multiplier = FEE_SCALE - FEE_MULTIPLIER;
 
-        let coin_in_val_after_fees = coin_in * fee_multiplier;
+        let coin_in_val_after_fees = (coin_in_after_fee as u128) * (fee_multiplier as u128);
+
         // reserve_in size after adding coin_in (scaled to 1000)
-        let new_reserve_in = (reserve_in * FEE_SCALE) + coin_in_val_after_fees;
+        let new_reserve_in = ((reserve_in as u128) * (FEE_SCALE as u128))
+            + coin_in_val_after_fees;
 
         // Multiply coin_in by the current exchange rate:
         // current_exchange_rate = reserve_out / reserve_in
         // amount_in_after_fees * current_exchange_rate -> amount_out
-        math::mul_div(coin_in_val_after_fees, // scaled to 1000
-            reserve_out,
+        math::mul_div_u128(coin_in_val_after_fees, // scaled to 1000
+            (reserve_out as u128),
             new_reserve_in  // scaled to 1000
         )
     }

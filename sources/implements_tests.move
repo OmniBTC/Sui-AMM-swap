@@ -1,15 +1,15 @@
 // Copyright 2022 OmniBTC Authors. Licensed under Apache-2.0 License.
 
 #[test_only]
-/// Refer to https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/pool.move#L346
+/// Refer to https://github.com/OmniBTC/Aptos-AMM-swap/blob/main/tests/interface_tests.move
 ///
 /// Tests for the pool module.
 /// They are sequential and based on top of each other.
 /// ```
 /// * - test_add_liquidity_with_register
 /// |   +-- test_add_liquidity
-/// |   +-- test_swap_sui
-/// |       +-- test_swap_token
+/// |   +-- test_swap_usdt_for_xbtc
+/// |       +-- test_swap_xbtc_for_usdt
 /// |           +-- test_withdraw_almost_all
 /// |           +-- test_withdraw_all
 /// ```
@@ -22,13 +22,20 @@ module swap::implements_tests {
     use sui::test_scenario::{Self, Scenario, next_tx, ctx, end};
 
     use swap::implements::{Self, LP, Global};
+    use swap::math::sqrt;
 
-    /// Gonna be our test token.
-    struct BEEP {}
-
-    const SUI_AMOUNT: u64 = 1000000000;
-    const BEEP_AMOUNT: u64 = 1000000;
+    const XBTC_AMOUNT: u64 = 100000000;
+    const USDT_AMOUNT: u64 = 1900000000000;
     const MINIMAL_LIQUIDITY: u64 = 1000;
+    const MAX_U64: u64 = 18446744073709551615;
+
+    // test coins
+
+    struct XBTC {}
+
+    struct USDT {}
+
+    struct BEEP {}
 
     // Tests section
     #[test]
@@ -39,9 +46,23 @@ module swap::implements_tests {
 
         let lp_name = implements::generate_lp_name<SUI, BEEP>();
         assert!(lp_name == expect_name, 1);
-
         let lp_name = implements::generate_lp_name<BEEP, SUI>();
         assert!(lp_name == expect_name, 2);
+
+        let expect_name = utf8(
+            b"LP-0000000000000000000000000000000000000000::implements_tests::USDT-0000000000000000000000000000000000000000::implements_tests::XBTC"
+        );
+
+        let lp_name = implements::generate_lp_name<XBTC, USDT>();
+        assert!(lp_name == expect_name, 3);
+        let lp_name = implements::generate_lp_name<USDT, XBTC>();
+        assert!(lp_name == expect_name, 4);
+    }
+
+    #[test]
+    fun test_order() {
+        assert!(implements::is_order<SUI, BEEP>(), 1);
+        assert!(implements::is_order<USDT, XBTC>(), 2);
     }
 
     #[test]
@@ -59,16 +80,16 @@ module swap::implements_tests {
     }
 
     #[test]
-    fun test_swap_sui() {
+    fun test_swap_usdt_for_xbtc() {
         let scenario = scenario();
-        swap_sui(&mut scenario);
+        swap_usdt_for_xbtc(&mut scenario);
         end(scenario);
     }
 
     #[test]
-    fun test_swap_token() {
+    fun test_swap_xbtc_for_usdt() {
         let scenario = scenario();
-        swap_token(&mut scenario);
+        swap_xbtc_for_usdt(&mut scenario);
         end(scenario);
     }
 
@@ -94,9 +115,6 @@ module swap::implements_tests {
         end(scenario);
     }
 
-    /// Init a Pool with a 1_000_000 BEEP and 1_000_000_000 SUI;
-    /// Set the ratio BEEP : SUI = 1 : 1000.
-    /// Set LP token amount to 1000;
     fun add_liquidity_with_register(test: &mut Scenario) {
         let (owner, _) = people();
 
@@ -109,15 +127,15 @@ module swap::implements_tests {
         {
             let global = test_scenario::take_shared<Global>(test);
 
-            let (lp, _pool_id) = implements::add_liquidity_for_testing<SUI, BEEP>(
+            let (lp, _pool_id) = implements::add_liquidity_for_testing<USDT, XBTC>(
                 &mut global,
-                mint<SUI>(SUI_AMOUNT, ctx(test)),
-                mint<BEEP>(BEEP_AMOUNT, ctx(test)),
+                mint<USDT>(USDT_AMOUNT, ctx(test)),
+                mint<XBTC>(XBTC_AMOUNT, ctx(test)),
                 ctx(test)
             );
 
             let burn = burn(lp);
-            assert!(burn == 31621000, burn);
+            assert!(burn == sqrt(USDT_AMOUNT) * sqrt(XBTC_AMOUNT) - MINIMAL_LIQUIDITY, burn);
 
             test_scenario::return_shared(global)
         };
@@ -125,13 +143,13 @@ module swap::implements_tests {
         next_tx(test, owner);
         {
             let global = test_scenario::take_shared<Global>(test);
-            let pool = implements::get_mut_pool_for_testing<SUI, BEEP>(&mut global);
+            let pool = implements::get_mut_pool_for_testing<USDT, XBTC>(&mut global);
 
-            let (sui_amount, token_amount, lp_supply) = implements::get_reserves_size(pool);
+            let (reserve_usdt, reserve_xbtc, lp_supply) = implements::get_reserves_size(pool);
 
-            assert!(lp_supply == 31621000, lp_supply);
-            assert!(sui_amount == SUI_AMOUNT, 0);
-            assert!(token_amount == BEEP_AMOUNT, 0);
+            assert!(lp_supply == sqrt(USDT_AMOUNT) * sqrt(XBTC_AMOUNT) - MINIMAL_LIQUIDITY, lp_supply);
+            assert!(reserve_usdt == USDT_AMOUNT, 0);
+            assert!(reserve_xbtc == XBTC_AMOUNT, 0);
 
             test_scenario::return_shared(global)
         };
@@ -146,27 +164,25 @@ module swap::implements_tests {
         next_tx(test, theguy);
         {
             let global = test_scenario::take_shared<Global>(test);
-            let pool = implements::get_mut_pool_for_testing<SUI, BEEP>(&mut global);
+            let pool = implements::get_mut_pool_for_testing<USDT, XBTC>(&mut global);
 
-            let (sui_amount, token_amount, lp_supply) = implements::get_reserves_size<SUI, BEEP>(pool);
+            let (reserve_usdt, reserve_xbtc, _lp_supply) = implements::get_reserves_size<USDT, XBTC>(pool);
 
-            let (lp_tokens, _returns) = implements::add_liquidity_for_testing<SUI, BEEP>(
+            let (lp_tokens, _returns) = implements::add_liquidity_for_testing<USDT, XBTC>(
                 &mut global,
-                mint<SUI>(sui_amount, ctx(test)),
-                mint<BEEP>(token_amount, ctx(test)),
+                mint<USDT>(reserve_usdt / 100, ctx(test)),
+                mint<XBTC>(reserve_xbtc / 100, ctx(test)),
                 ctx(test)
             );
 
             let burn = burn(lp_tokens);
-            assert!(burn == lp_supply + MINIMAL_LIQUIDITY, burn);
+            assert!(burn == 137840390, burn);
 
             test_scenario::return_shared(global)
         };
     }
 
-    /// The other guy tries to exchange 5_000_000 sui for ~ 5000 BEEP,
-    /// minus the commission that is paid to the pool.
-    fun swap_sui(test: &mut Scenario) {
+    fun swap_usdt_for_xbtc(test: &mut Scenario) {
         add_liquidity_with_register(test);
 
         let (_, the_guy) = people();
@@ -174,113 +190,124 @@ module swap::implements_tests {
         next_tx(test, the_guy);
         {
             let global = test_scenario::take_shared<Global>(test);
+            let pool = implements::get_mut_pool_for_testing<USDT, XBTC>(&mut global);
+            let (reserve_usdt, reserve_xbtc, _lp_supply) = implements::get_reserves_size<USDT, XBTC>(pool);
 
-            let returns = implements::swap_for_testing<SUI, BEEP>(
+            let expected_xbtc = implements::get_amount_out(
+                (USDT_AMOUNT / 100 * 997 / 1000),
+                reserve_usdt,
+                reserve_xbtc
+            );
+
+            let returns = implements::swap_for_testing<USDT, XBTC>(
                 &mut global,
-                mint<SUI>(5000000, ctx(test)),
-                0,
+                mint<USDT>(USDT_AMOUNT / 100, ctx(test)),
+                1,
                 ctx(test)
             );
             assert!(vector::length(&returns) == 4, vector::length(&returns));
 
             let coin_out = vector::borrow(&returns, 3);
-            // Check the value of the coin received by the guy.
-            // Due to rounding problem the value is not precise
-            // (works better on larger numbers).
-            assert!(*coin_out > 4950, 1);
+            assert!(*coin_out == expected_xbtc, *coin_out);
 
             test_scenario::return_shared(global);
         };
     }
 
-    /// The owner swaps back BEEP for SUI and expects an increase in price.
-    /// The sent amount of BEEP is 1000, initial price was 1 BEEP : 1000 SUI;
-    fun swap_token(test: &mut Scenario) {
-        swap_sui(test);
+    fun swap_xbtc_for_usdt(test: &mut Scenario) {
+        swap_usdt_for_xbtc(test);
 
         let (owner, _) = people();
 
         next_tx(test, owner);
         {
             let global = test_scenario::take_shared<Global>(test);
+            let pool = implements::get_mut_pool_for_testing<USDT, XBTC>(&mut global);
+            let (reserve_usdt, reserve_xbtc, _lp_supply) = implements::get_reserves_size<USDT, XBTC>(pool);
 
-            let returns = implements::swap_for_testing<BEEP, SUI>(
+            let expected_usdt = implements::get_amount_out(
+                (XBTC_AMOUNT / 100 * 997 / 1000),
+                reserve_xbtc,
+                reserve_usdt
+            );
+
+            let returns = implements::swap_for_testing<XBTC, USDT>(
                 &mut global,
-                mint<BEEP>(1000, ctx(test)),
-                0,
+                mint<XBTC>(XBTC_AMOUNT / 100, ctx(test)),
+                1,
                 ctx(test)
             );
             assert!(vector::length(&returns) == 4, vector::length(&returns));
 
             let coin_out = vector::borrow(&returns, 1);
-            // Actual win is 1005956, which is ~ 0.6% profit
-            assert!(*coin_out > 1000000u64, 2);
+            assert!(*coin_out == expected_usdt, expected_usdt);
 
             test_scenario::return_shared(global);
         };
     }
 
-    /// Withdraw (MAX_LIQUIDITY - 1) from the pool
     fun withdraw_almost_all(test: &mut Scenario) {
-        swap_token(test);
+        swap_xbtc_for_usdt(test);
 
         let (owner, _) = people();
 
-        // someone tries to pass MINTED_LSP and hopes there will be just 1 BEEP
         next_tx(test, owner);
         {
-            let lp = mint<LP<SUI, BEEP>>(31621000, ctx(test));
             let global = test_scenario::take_shared<Global>(test);
-            let pool = implements::get_mut_pool_for_testing<SUI, BEEP>(&mut global);
+            let pool = implements::get_mut_pool_for_testing<USDT, XBTC>(&mut global);
+            let (_reserve_usdt, _reserve_xbtc, to_mint_lp) = implements::get_reserves_size(pool);
 
-            let (sui, token) = implements::remove_liquidity_for_testing<SUI, BEEP>(pool, lp, ctx(test));
-            let (sui_reserve, token_reserve, lp_supply) = implements::get_reserves_size(pool);
+            let lp = mint<LP<USDT, XBTC>>(to_mint_lp, ctx(test));
+
+            let (usdt, xbtc) = implements::remove_liquidity_for_testing<USDT, XBTC>(pool, lp, ctx(test));
+            let (reserve_usdt, reserve_xbtc, lp_supply) = implements::get_reserves_size(pool);
 
             assert!(lp_supply == 0, lp_supply);
-            assert!(token_reserve == 0, token_reserve); // actually 1 BEEP is left
-            assert!(sui_reserve == 0, sui_reserve);
+            assert!(reserve_xbtc == 0, reserve_xbtc);
+            assert!(reserve_usdt == 0, reserve_usdt);
 
-            burn(sui);
-            burn(token);
+            burn(usdt);
+            burn(xbtc);
 
             test_scenario::return_shared(global);
         }
     }
 
-    /// The owner tries to withdraw all liquidity from the pool.
     fun withdraw_all(test: &mut Scenario) {
-        swap_token(test);
+        swap_xbtc_for_usdt(test);
 
         let (owner, _) = people();
 
         next_tx(test, owner);
         {
-            let lp = mint<LP<SUI, BEEP>>(31621000, ctx(test));
             let global = test_scenario::take_shared<Global>(test);
-            let pool = implements::get_mut_pool_for_testing<SUI, BEEP>(&mut global);
+            let pool = implements::get_mut_pool_for_testing<USDT, XBTC>(&mut global);
+            let (_reserve_usdt, _reserve_xbtc, to_mint_lp) = implements::get_reserves_size(pool);
 
-            let (sui, token) = implements::remove_liquidity_for_testing(pool, lp, ctx(test));
-            let (sui_reserve, token_reserve, lp_supply) = implements::get_reserves_size(pool);
+            let lp = mint<LP<USDT, XBTC>>(to_mint_lp, ctx(test));
+
+            let (usdt, xbtc) = implements::remove_liquidity_for_testing(pool, lp, ctx(test));
+            let (reserve_usdt, reserve_xbtc, lp_supply) = implements::get_reserves_size(pool);
             assert!(lp_supply == 0, lp_supply);
-            assert!(sui_reserve == 0, sui_reserve);
-            assert!(token_reserve == 0, token_reserve);
+            assert!(reserve_usdt == 0, reserve_usdt);
+            assert!(reserve_xbtc == 0, reserve_xbtc);
 
 
-            let (sui_fee, token_fee, fee_sui, fee_token) = implements::withdraw_for_testing<SUI, BEEP>(
+            let (usdt_fee, xbtc_fee, fee_usdt, fee_xbtc) = implements::withdraw_for_testing<USDT, XBTC>(
                 &mut global,
                 ctx(test)
             );
 
             // make sure that withdrawn assets
-            let burn_sui = burn(sui);
-            let burn_token = burn(token);
-            let burn_sui_fee = burn(sui_fee);
-            let burn_token_fee = burn(token_fee);
+            let burn_usdt = burn(usdt);
+            let burn_xbtc = burn(xbtc);
+            let burn_usdt_fee = burn(usdt_fee);
+            let burn_xbtc_fee = burn(xbtc_fee);
 
-            assert!(burn_sui_fee == fee_sui, fee_sui);
-            assert!(burn_token_fee == fee_token, fee_token);
-            assert!(burn_sui == 1003979044, burn_sui);
-            assert!(burn_token == 996037, burn_token);
+            assert!(burn_usdt_fee == fee_usdt, fee_usdt);
+            assert!(burn_xbtc_fee == fee_xbtc, fee_xbtc);
+            assert!(burn_usdt == 1899870399939, burn_usdt);
+            assert!(burn_xbtc == 100012775, burn_xbtc);
 
             test_scenario::return_shared(global);
         };
