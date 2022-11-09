@@ -7,6 +7,6 @@ version = "1.0.0"
 Sui = { local = "../sui/crates/sui-framework" }
 
 [addresses]
-swap =  "0x0"
+swap = "0x0"
 controller = "0x82d770bab2d607b919f2dcc45a7491ede65fe6db"
 beneficiary = "0x82d770bab2d607b919f2dcc45a7491ede65fe6db"

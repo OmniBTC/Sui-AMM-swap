@@ -1,6 +1,7 @@
 # Test coins
 
 ## cmd
+
 ```bash
 sui client publish --gas-budget 10000
 package=0x0f2105964cc96221416fd7884cda044899d09e58

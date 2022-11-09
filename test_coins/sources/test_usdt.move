@@ -1,8 +1,7 @@
 module 0x0::usdt {
-    use sui::tx_context::TxContext;
     use sui::coin;
     use sui::transfer;
-    use sui::tx_context;
+    use sui::tx_context::{Self, TxContext};
 
     /// USDT for test
     struct USDT has drop {}

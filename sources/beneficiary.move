@@ -20,14 +20,14 @@ module swap::beneficiary {
         assert!(implements::beneficiary(global) == tx_context::sender(ctx), ERR_NO_PERMISSIONS);
 
         let pool = implements::get_mut_pool<X, Y>(global);
-        let (fee_sui, fee_token, sui_fee, token_fee) = implements::withdraw(pool, ctx);
+        let (coin_x, coin_y, fee_coin_x, fee_coin_y) = implements::withdraw(pool, ctx);
 
         transfer::transfer(
-            fee_sui,
+            coin_x,
             tx_context::sender(ctx)
         );
         transfer::transfer(
-            fee_token,
+            coin_y,
             tx_context::sender(ctx)
         );
 
@@ -37,8 +37,8 @@ module swap::beneficiary {
         withdrew_event(
             global,
             lp_name,
-            sui_fee,
-            token_fee
+            fee_coin_x,
+            fee_coin_y
         )
     }
 }

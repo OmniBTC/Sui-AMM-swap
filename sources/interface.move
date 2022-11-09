@@ -3,9 +3,9 @@ module swap::interface {
     use std::vector;
 
     use sui::coin::{Coin, value, split, destroy_zero};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
     use sui::pay;
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
 
     use swap::event::{added_event, removed_event, swapped_event};
     use swap::implements::{Self, Global, LP};
