@@ -319,9 +319,9 @@ module swap::implements {
             assert!(coin_x_reserve > 0 && coin_y_reserve > 0, ERR_RESERVES_EMPTY);
             let coin_x_in = coin::value(&coin_in);
 
-            let coin_x_fee = get_fee(coin_x_in);
+            let coin_x_fee = get_fee_to_fundation(coin_x_in);
             let coin_y_out = get_amount_out(
-                coin_x_in - coin_x_fee,
+                coin_in_after_fee(coin_x_in),
                 coin_x_reserve,
                 coin_y_reserve,
             );
@@ -348,9 +348,9 @@ module swap::implements {
             assert!(coin_x_reserve > 0 && coin_y_reserve > 0, ERR_RESERVES_EMPTY);
             let coin_y_in = coin::value(&coin_in);
 
-            let coin_y_fee = get_fee(coin_y_in);
+            let coin_y_fee = get_fee_to_fundation(coin_y_in);
             let coin_x_out = get_amount_out(
-                coin_y_in - coin_y_fee,
+                coin_in_after_fee(coin_y_in),
                 coin_y_reserve,
                 coin_x_reserve,
             );
@@ -412,11 +412,28 @@ module swap::implements {
         )
     }
 
-    /// Calculate the fee
-    public fun get_fee(
+    public fun get_fee_amount<X, Y>(pool: &Pool<X, Y>): (u64, u64) {
+        (
+            balance::value(&pool.fee_coin_x),
+            balance::value(&pool.fee_coin_y),
+        )
+    }
+
+    /// return coin_in * 0.3% * 20%
+    public fun get_fee_to_fundation(
         coin_in: u64,
     ): u64 {
-        math::mul_div(coin_in, FEE_MULTIPLIER, FEE_SCALE)
+        // 20% fee to swap fundation
+        let fee_multiplier = FEE_MULTIPLIER / 5;
+
+        math::mul_div(coin_in, fee_multiplier, FEE_SCALE)
+    }
+
+    /// return coin_in * (1 - 0.3%)
+    public fun coin_in_after_fee(
+        coin_in: u64,
+    ): u64 {
+        coin_in - math::mul_div(coin_in, FEE_MULTIPLIER, FEE_SCALE)
     }
 
     /// Calculate the output amount minus the fee - 0.3%

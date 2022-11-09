@@ -12,6 +12,11 @@
 /// |       +-- test_swap_xbtc_for_usdt
 /// |           +-- test_withdraw_almost_all
 /// |           +-- test_withdraw_all
+/// | - test_get_amount_out_does_not_overflow_on_coin_in_close_to_u64_max
+/// | - test_add_liquidity_aborts_if_pool_has_full
+/// | - test_swap_with_value_should_ok
+/// | - test_lp_name
+/// | - test_order
 /// ```
 module swap::implements_tests {
     use std::string::utf8;
@@ -22,7 +27,7 @@ module swap::implements_tests {
     use sui::test_scenario::{Self, Scenario, next_tx, ctx, end};
 
     use swap::implements::{Self, LP, Global};
-    use swap::math::sqrt;
+    use swap::math::{sqrt, mul_div};
 
     const XBTC_AMOUNT: u64 = 100000000;
     const USDT_AMOUNT: u64 = 1900000000000;
@@ -104,6 +109,28 @@ module swap::implements_tests {
     fun test_withdraw_all() {
         let scenario = scenario();
         withdraw_all(&mut scenario);
+        end(scenario);
+    }
+
+    #[test]
+    fun test_get_amount_out_does_not_overflow_on_coin_in_close_to_u64_max() {
+        let scenario = scenario();
+        get_amount_out_does_not_overflow_on_coin_in_close_to_u64_max(&mut scenario);
+        end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 2)]
+    fun test_add_liquidity_aborts_if_pool_has_full() {
+        let scenario = scenario();
+        add_liquidity_aborts_if_pool_has_full(&mut scenario);
+        end(scenario);
+    }
+
+    #[test]
+    fun test_swap_with_value_should_ok() {
+        let scenario = scenario();
+        swap_with_value_should_ok(&mut scenario);
         end(scenario);
     }
 
@@ -306,11 +333,180 @@ module swap::implements_tests {
 
             assert!(burn_usdt_fee == fee_usdt, fee_usdt);
             assert!(burn_xbtc_fee == fee_xbtc, fee_xbtc);
-            assert!(burn_usdt == 1899870399939, burn_usdt);
-            assert!(burn_xbtc == 100012775, burn_xbtc);
+            assert!(burn_usdt == 1899915546715, burn_usdt);
+            assert!(burn_xbtc == 100015175, burn_xbtc);
 
             test_scenario::return_shared(global);
         };
+    }
+
+    fun get_amount_out_does_not_overflow_on_coin_in_close_to_u64_max(test: &mut Scenario) {
+        let (owner, _) = people();
+
+        next_tx(test, owner);
+        {
+            implements::init_for_testing(ctx(test));
+        };
+
+        let usdt_val = MAX_U64 / 20000;
+        let xbtc_val = MAX_U64 / 20000;
+        let max_usdt = MAX_U64;
+
+        next_tx(test, owner);
+        {
+            let global = test_scenario::take_shared<Global>(test);
+
+            let (lp, _pool_id) = implements::add_liquidity_for_testing<USDT, XBTC>(
+                &mut global,
+                mint<USDT>(usdt_val, ctx(test)),
+                mint<XBTC>(xbtc_val, ctx(test)),
+                ctx(test)
+            );
+
+            let burn = burn(lp);
+            assert!(burn == sqrt(usdt_val) * sqrt(xbtc_val) - MINIMAL_LIQUIDITY, burn);
+
+            test_scenario::return_shared(global)
+        };
+
+        next_tx(test, owner);
+        {
+            let global = test_scenario::take_shared<Global>(test);
+            let (lp_tokens, _returns) = implements::add_liquidity_for_testing<USDT, XBTC>(
+                &mut global,
+                mint<USDT>(usdt_val, ctx(test)),
+                mint<XBTC>(xbtc_val, ctx(test)),
+                ctx(test)
+            );
+
+            burn(lp_tokens);
+
+            let pool = implements::get_mut_pool_for_testing<USDT, XBTC>(&mut global);
+            let (reserve_usdt, reserve_xbtc, _lp_supply) = implements::get_reserves_size<USDT, XBTC>(pool);
+
+            let _expected_xbtc = implements::get_amount_out(
+                (mul_div(max_usdt, 997, 1000)),
+                reserve_usdt,
+                reserve_xbtc
+            );
+
+            test_scenario::return_shared(global)
+        };
+    }
+
+    fun add_liquidity_aborts_if_pool_has_full(test: &mut Scenario) {
+        let (owner, _) = people();
+
+        next_tx(test, owner);
+        {
+            implements::init_for_testing(ctx(test));
+        };
+
+        let usdt_val = MAX_U64 / 10000;
+        let xbtc_val = MAX_U64 / 10000;
+
+        next_tx(test, owner);
+        {
+            let global = test_scenario::take_shared<Global>(test);
+
+            let (lp, _pool_id) = implements::add_liquidity_for_testing<USDT, XBTC>(
+                &mut global,
+                mint<USDT>(usdt_val, ctx(test)),
+                mint<XBTC>(xbtc_val, ctx(test)),
+                ctx(test)
+            );
+            burn(lp);
+            test_scenario::return_shared(global)
+        }
+    }
+
+    fun swap_with_value_should_ok(test: &mut Scenario) {
+        let (owner, _) = people();
+
+        next_tx(test, owner);
+        {
+            implements::init_for_testing(ctx(test));
+        };
+
+        let usdt_val = 184456367;
+        let xbtc_val = 70100;
+
+        next_tx(test, owner);
+        {
+            let global = test_scenario::take_shared<Global>(test);
+
+            let (lp, _pool_id) = implements::add_liquidity_for_testing<USDT, XBTC>(
+                &mut global,
+                mint<USDT>(usdt_val, ctx(test)),
+                mint<XBTC>(xbtc_val, ctx(test)),
+                ctx(test)
+            );
+
+            let burn = burn(lp);
+            assert!(burn == sqrt(usdt_val) * sqrt(xbtc_val) - MINIMAL_LIQUIDITY, burn);
+
+            test_scenario::return_shared(global)
+        };
+
+        next_tx(test, owner);
+        {
+            let global = test_scenario::take_shared<Global>(test);
+
+            let pool = implements::get_mut_pool_for_testing<USDT, XBTC>(&mut global);
+            let (reserve_usdt, reserve_xbtc, _lp_supply) = implements::get_reserves_size<USDT, XBTC>(pool);
+
+            assert!(184456367 == reserve_usdt, reserve_usdt);
+            assert!(70100 == reserve_xbtc, reserve_xbtc);
+
+            let expected_btc = implements::get_amount_out(
+                usdt_val - mul_div(usdt_val, 3, 1000),
+                reserve_usdt,
+                reserve_xbtc
+            );
+            assert!(34944 == expected_btc, expected_btc);
+
+            let returns = implements::swap_for_testing<USDT, XBTC>(
+                &mut global,
+                mint<USDT>(usdt_val, ctx(test)),
+                1,
+                ctx(test)
+            );
+            assert!(vector::length(&returns) == 4, vector::length(&returns));
+            let coin_out = vector::borrow(&returns, 3);
+            assert!(*coin_out == expected_btc, *coin_out);
+
+            test_scenario::return_shared(global)
+        };
+
+        next_tx(test, owner);
+        {
+            let global = test_scenario::take_shared<Global>(test);
+
+            let pool = implements::get_mut_pool_for_testing<USDT, XBTC>(&mut global);
+            let (reserve_usdt, reserve_xbtc, _lp_supply) = implements::get_reserves_size<USDT, XBTC>(pool);
+
+            assert!(368802061 == reserve_usdt, reserve_usdt);
+            assert!(35156 == reserve_xbtc, reserve_xbtc);
+
+            let expected_usdt = implements::get_amount_out(
+                xbtc_val - mul_div(xbtc_val, 3, 1000),
+                reserve_xbtc,
+                reserve_usdt
+            );
+            assert!(245127326 == expected_usdt, expected_usdt);
+
+            let returns = implements::swap_for_testing<XBTC, USDT>(
+                &mut global,
+                mint<XBTC>(xbtc_val, ctx(test)),
+                1,
+                ctx(test)
+            );
+            assert!(vector::length(&returns) == 4, vector::length(&returns));
+            let coin_out = vector::borrow(&returns, 1);
+            assert!(*coin_out == expected_usdt, *coin_out);
+
+            test_scenario::return_shared(global)
+        }
     }
 
     /// This just tests the math.
