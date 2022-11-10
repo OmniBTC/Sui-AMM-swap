@@ -146,6 +146,8 @@ module swap::interface {
         coin_y_min: u64,
         ctx: &mut TxContext
     ) {
+        assert!(!implements::is_emergency(global), ERR_EMERGENCY);
+
         // 1. merge coins
         let merged_coin_x = vector::pop_back(&mut coins_x);
         pay::join_vec(&mut merged_coin_x, coins_x);
@@ -185,6 +187,25 @@ module swap::interface {
         }
     }
 
+    public entry fun multi_remove_liquidity<X, Y>(
+        global: &mut Global,
+        lp_coin: vector<Coin<LP<X, Y>>>,
+        ctx: &mut TxContext
+    ) {
+        assert!(!implements::is_emergency(global), ERR_EMERGENCY);
+
+        // 1. merge coins
+        let merged_lp = vector::pop_back(&mut lp_coin);
+        pay::join_vec(&mut merged_lp, lp_coin);
+
+        // 2. remove liquidity
+        remove_liquidity(
+            global,
+            merged_lp,
+            ctx
+        )
+    }
+
     public entry fun multi_swap<X, Y>(
         global: &mut Global,
         coins_in: vector<Coin<X>>,
@@ -192,6 +213,8 @@ module swap::interface {
         coin_out_min: u64,
         ctx: &mut TxContext
     ) {
+        assert!(!implements::is_emergency(global), ERR_EMERGENCY);
+
         // 1. merge coins
         let merged_coins_in = vector::pop_back(&mut coins_in);
         pay::join_vec(&mut merged_coins_in, coins_in);
