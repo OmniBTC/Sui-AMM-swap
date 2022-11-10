@@ -13,7 +13,7 @@ module test::faucet {
 
     const ONE_COIN: u64 = 100000000;
 
-    const ERR_NO_ENOUGH_COINS: u64 = 1;
+    const ERR_NOT_ENOUGH_COINS: u64 = 1;
     const ERR_INVALID_AMOUNT: u64 = 2;
 
     struct Faucet has key {

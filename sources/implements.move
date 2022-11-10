@@ -19,7 +19,7 @@ module swap::implements {
     friend swap::controller;
     friend swap::interface;
 
-    /// For when supplied Coin is zero.
+    /// For when Coin is zero.
     const ERR_ZERO_AMOUNT: u64 = 0;
     /// For when someone tries to swap in an empty pool.
     const ERR_RESERVES_EMPTY: u64 = 1;
@@ -466,6 +466,8 @@ module swap::implements {
     ): (Coin<X>, Coin<Y>, u64, u64) {
         let coin_x_fee = balance::value(&pool.fee_coin_x);
         let coin_y_fee = balance::value(&pool.fee_coin_y);
+
+        assert!(coin_x_fee > 0 && coin_y_fee > 0, ERR_ZERO_AMOUNT);
 
         let fee_coin_x = coin::from_balance(
             balance::split(&mut pool.fee_coin_x, coin_x_fee),
