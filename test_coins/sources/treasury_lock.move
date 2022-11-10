@@ -1,4 +1,4 @@
-module 0x0::lock {
+module test::lock {
     use sui::object::{Self, UID};
     use sui::coin::{Self, TreasuryCap, Coin};
     use sui::vec_set::{Self, VecSet};

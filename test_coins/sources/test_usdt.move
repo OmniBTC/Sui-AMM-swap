@@ -1,8 +1,8 @@
-module 0x0::usdt {
+module test::usdt {
     use sui::coin;
     use sui::tx_context::TxContext;
 
-    use 0x0::lock::creator_lock;
+    use test::lock::creator_lock;
 
     /// USDT for test
     struct USDT has drop {}

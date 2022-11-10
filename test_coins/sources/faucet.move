@@ -1,4 +1,4 @@
-module 0x0::faucet {
+module test::faucet {
     use std::ascii::String;
     use std::type_name::{get, into_string};
 
@@ -9,7 +9,7 @@ module 0x0::faucet {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    use 0x0::lock::{Self, TreasuryLock};
+    use test::lock::{Self, TreasuryLock};
 
     const ONE_COIN: u64 = 100000000;
 

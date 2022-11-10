@@ -1,8 +1,8 @@
-module 0x0::xbtc {
+module test::xbtc {
     use sui::coin;
     use sui::tx_context::TxContext;
 
-    use 0x0::lock::creator_lock;
+    use test::lock::creator_lock;
 
     /// XBTC for test
     struct XBTC has drop {}
