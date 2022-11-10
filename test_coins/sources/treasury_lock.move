@@ -1,6 +1,6 @@
 module 0x0::lock {
     use sui::object::{Self, UID};
-    use sui::coin::{Self, TreasuryCap};
+    use sui::coin::{Self, TreasuryCap, Coin};
     use sui::vec_set::{Self, VecSet};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
@@ -64,6 +64,25 @@ module 0x0::lock {
             &mut lock.treasury_cap,
             amount,
             recipient,
+            ctx
+        )
+    }
+
+    public fun mint<T>(
+        lock: &mut TreasuryLock<T>,
+        amount: u64,
+        ctx: &mut TxContext
+    ): Coin<T> {
+        let operator = tx_context::sender(ctx);
+        assert!(
+            lock.creator == operator
+                || vec_set::contains(&lock.admins, &operator),
+            ERR_NO_PERMISSIONS
+        );
+
+        coin::mint(
+            &mut lock.treasury_cap,
+            amount,
             ctx
         )
     }
