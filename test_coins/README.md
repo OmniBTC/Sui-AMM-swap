@@ -3,12 +3,12 @@
 ## cmd
 
 ```bash
-# deploy
+# deploy on sui testnet
 sui client publish --gas-budget 10000
-package=0x6674cb08a6ef2a155b3c341a8697572898f0e4d1
-usdt_cap_lock=0xdf324d814e75f295e10afb5388766906268fb6f3
-xbtc_cap_lock=0xe96f91cf753e19fc9bd6fd62092c4fe627616cc1
-faucet=0xa1edadeb50fc367837b6d37f361d6f7ee4688fdb
+package=0x07a38a173a0ff372669de25ab92901243de7f0ec
+usdt_cap_lock=0x9c96eee244eac282b8b8b7a4548afd32500d69cd
+xbtc_cap_lock=0x676e2cc59365d8d6975566832213073c7682f64d
+faucet=0x7cf7b75bb4e6530d7f971702043753224d40cc01
 
 # add USDT admin
 sui client call \
@@ -53,7 +53,7 @@ sui client call \
   --type-args $package::xbtc::XBTC
   
 # deposit usdt to faucet
-# 1000000 means 1000000*ONE_COIN
+# 18446744073 means 18446744073*ONE_COIN
 sui client call \
   --gas-budget 10000 \
   --package $package \
@@ -61,10 +61,10 @@ sui client call \
   --function mint_and_deposit \
   --args $faucet \
       $usdt_cap_lock \
-      1000000 \
+      18446744073 \
   --type-args $package::usdt::USDT
 
-usdt_in_faucet=0x7903334dffd5e8057e016b99128bb4a9f3cf1874
+usdt_in_faucet=0xb38be223e897ea5bc309b76ffe02ee9edb86d674
 
 # deposit xbtc to faucet
 # 1000000 means 1000000*ONE_COIN
@@ -78,7 +78,7 @@ sui client call \
       1000000 \
   --type-args $package::xbtc::XBTC
   
-xbtc_in_faucet=0xeb4f442dcdadb6a33231fd7ddc3863f2e0ddfa53
+xbtc_in_faucet=0x1d50a57ae82664859a585d6904308bfc009c3b76
 
 # claim usdt from faucet
 # ONE_COIN = 100000000

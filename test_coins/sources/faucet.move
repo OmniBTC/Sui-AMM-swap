@@ -72,7 +72,7 @@ module test::faucet {
         let coin_name = into_string(get<T>());
         assert!(
             bag::contains_with_type<String, Balance<T>>(&faucet.coins, coin_name),
-            ERR_NO_ENOUGH_COINS
+            ERR_NOT_ENOUGH_COINS
         );
 
         let mut_balance = bag::borrow_mut<String, Balance<T>>(
@@ -82,7 +82,7 @@ module test::faucet {
 
         assert!(
             value(mut_balance) >= ONE_COIN,
-            ERR_NO_ENOUGH_COINS
+            ERR_NOT_ENOUGH_COINS
         );
 
         transfer::transfer(
