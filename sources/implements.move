@@ -82,7 +82,6 @@ module swap::implements {
     struct Global has key {
         id: UID,
         has_paused: bool,
-        pool_account: address,
         controller: address,
         beneficiary: address,
         pools: Bag,
@@ -93,7 +92,6 @@ module swap::implements {
         let global = Global {
             id: object::new(ctx),
             has_paused: false,
-            pool_account: tx_context::sender(ctx),
             controller: @controller,
             beneficiary: @beneficiary,
             pools: bag::new(ctx)
@@ -139,10 +137,6 @@ module swap::implements {
 
     public(friend) fun is_emergency(global: &Global): bool {
         global.has_paused
-    }
-
-    public(friend) fun pool_account(global: &Global): address {
-        global.pool_account
     }
 
     public(friend) fun controller(global: &Global): address {
