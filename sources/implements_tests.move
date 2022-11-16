@@ -19,7 +19,10 @@
 /// | - test_order
 /// ```
 module swap::implements_tests {
+    use std::ascii::into_bytes;
+    use std::bcs;
     use std::string::utf8;
+    use std::type_name::{get, into_string};
     use std::vector;
 
     use sui::coin::{mint_for_testing as mint, destroy_for_testing as burn};
@@ -49,19 +52,38 @@ module swap::implements_tests {
             b"LP-0000000000000000000000000000000000000002::sui::SUI-0000000000000000000000000000000000000000::implements_tests::BEEP"
         );
 
+        assert!(
+            into_bytes(into_string(get<SUI>())) == b"0000000000000000000000000000000000000002::sui::SUI",
+            1
+        );
+        assert!(
+            into_bytes(into_string(get<BEEP>())) == b"0000000000000000000000000000000000000000::implements_tests::BEEP",
+            2
+        );
+
+        let bcs_sui = bcs::to_bytes(&get<SUI>());
+        let bcs_beep = bcs::to_bytes(&get<BEEP>());
+
+        // bcs for vector use ULEB128 encode
+        // for this test, the first byte is the length of bcs data
+        let length_bcs_sui = vector::borrow(&bcs_sui, 0);
+        let length_bcs_beep = vector::borrow(&bcs_beep, 0);
+
+        assert!(*length_bcs_sui < *length_bcs_beep, 3);
+
         let lp_name = implements::generate_lp_name<SUI, BEEP>();
-        assert!(lp_name == expect_name, 1);
+        assert!(lp_name == expect_name, 4);
         let lp_name = implements::generate_lp_name<BEEP, SUI>();
-        assert!(lp_name == expect_name, 2);
+        assert!(lp_name == expect_name, 5);
 
         let expect_name = utf8(
             b"LP-0000000000000000000000000000000000000000::implements_tests::USDT-0000000000000000000000000000000000000000::implements_tests::XBTC"
         );
 
         let lp_name = implements::generate_lp_name<XBTC, USDT>();
-        assert!(lp_name == expect_name, 3);
+        assert!(lp_name == expect_name, 6);
         let lp_name = implements::generate_lp_name<USDT, XBTC>();
-        assert!(lp_name == expect_name, 4);
+        assert!(lp_name == expect_name, 7);
     }
 
     #[test]
