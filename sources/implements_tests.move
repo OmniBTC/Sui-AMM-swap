@@ -30,7 +30,7 @@ module swap::implements_tests {
     use sui::test_scenario::{Self, Scenario, next_tx, ctx, end};
 
     use swap::implements::{Self, LP, Global};
-    use swap::math::{sqrt, mul_div};
+    use swap::math::sqrt;
 
     const XBTC_AMOUNT: u64 = 100000000;
     const USDT_AMOUNT: u64 = 1900000000000;
@@ -243,7 +243,7 @@ module swap::implements_tests {
             let (reserve_usdt, reserve_xbtc, _lp_supply) = implements::get_reserves_size<USDT, XBTC>(pool);
 
             let expected_xbtc = implements::get_amount_out(
-                (USDT_AMOUNT / 100 * 997 / 1000),
+                USDT_AMOUNT / 100,
                 reserve_usdt,
                 reserve_xbtc
             );
@@ -275,7 +275,7 @@ module swap::implements_tests {
             let (reserve_usdt, reserve_xbtc, _lp_supply) = implements::get_reserves_size<USDT, XBTC>(pool);
 
             let expected_usdt = implements::get_amount_out(
-                (XBTC_AMOUNT / 100 * 997 / 1000),
+                XBTC_AMOUNT / 100,
                 reserve_xbtc,
                 reserve_usdt
             );
@@ -355,8 +355,8 @@ module swap::implements_tests {
 
             assert!(burn_usdt_fee == fee_usdt, fee_usdt);
             assert!(burn_xbtc_fee == fee_xbtc, fee_xbtc);
-            assert!(burn_usdt == 1899915546715, burn_usdt);
-            assert!(burn_xbtc == 100015175, burn_xbtc);
+            assert!(burn_usdt == 1899858166476, burn_usdt);
+            assert!(burn_xbtc == 100012242, burn_xbtc);
 
             test_scenario::return_shared(global);
         };
@@ -407,7 +407,7 @@ module swap::implements_tests {
             let (reserve_usdt, reserve_xbtc, _lp_supply) = implements::get_reserves_size<USDT, XBTC>(pool);
 
             let _expected_xbtc = implements::get_amount_out(
-                (mul_div(max_usdt, 997, 1000)),
+                max_usdt,
                 reserve_usdt,
                 reserve_xbtc
             );
@@ -481,11 +481,11 @@ module swap::implements_tests {
             assert!(70100 == reserve_xbtc, reserve_xbtc);
 
             let expected_btc = implements::get_amount_out(
-                usdt_val - mul_div(usdt_val, 3, 1000),
+                usdt_val,
                 reserve_usdt,
                 reserve_xbtc
             );
-            assert!(34944 == expected_btc, expected_btc);
+            assert!(34997 == expected_btc, expected_btc);
 
             let returns = implements::swap_for_testing<USDT, XBTC>(
                 &mut global,
@@ -508,14 +508,14 @@ module swap::implements_tests {
             let (reserve_usdt, reserve_xbtc, _lp_supply) = implements::get_reserves_size<USDT, XBTC>(pool);
 
             assert!(368802061 == reserve_usdt, reserve_usdt);
-            assert!(35156 == reserve_xbtc, reserve_xbtc);
+            assert!(35103 == reserve_xbtc, reserve_xbtc);
 
             let expected_usdt = implements::get_amount_out(
-                xbtc_val - mul_div(xbtc_val, 3, 1000),
+                xbtc_val,
                 reserve_xbtc,
                 reserve_usdt
             );
-            assert!(245127326 == expected_usdt, expected_usdt);
+            assert!(245497690 == expected_usdt, expected_usdt);
 
             let returns = implements::swap_for_testing<XBTC, USDT>(
                 &mut global,

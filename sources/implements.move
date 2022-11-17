@@ -315,7 +315,7 @@ module swap::implements {
 
             let coin_x_fee = get_fee_to_fundation(coin_x_in);
             let coin_y_out = get_amount_out(
-                coin_in_after_fee(coin_x_in),
+                coin_x_in,
                 coin_x_reserve,
                 coin_y_reserve,
             );
@@ -344,7 +344,7 @@ module swap::implements {
 
             let coin_y_fee = get_fee_to_fundation(coin_y_in);
             let coin_x_out = get_amount_out(
-                coin_in_after_fee(coin_y_in),
+                coin_y_in,
                 coin_y_reserve,
                 coin_x_reserve,
             );
@@ -423,22 +423,15 @@ module swap::implements {
         math::mul_div(coin_in, fee_multiplier, FEE_SCALE)
     }
 
-    /// return coin_in * (1 - 0.3%)
-    public fun coin_in_after_fee(
-        coin_in: u64,
-    ): u64 {
-        coin_in - math::mul_div(coin_in, FEE_MULTIPLIER, FEE_SCALE)
-    }
-
     /// Calculate the output amount minus the fee - 0.3%
     public fun get_amount_out(
-        coin_in_after_fee: u64,
+        coin_in: u64,
         reserve_in: u64,
         reserve_out: u64,
     ): u64 {
         let fee_multiplier = FEE_SCALE - FEE_MULTIPLIER;
 
-        let coin_in_val_after_fees = (coin_in_after_fee as u128) * (fee_multiplier as u128);
+        let coin_in_val_after_fees = (coin_in as u128) * (fee_multiplier as u128);
 
         // reserve_in size after adding coin_in (scaled to 1000)
         let new_reserve_in = ((reserve_in as u128) * (FEE_SCALE as u128))
