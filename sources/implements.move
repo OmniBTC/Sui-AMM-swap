@@ -47,7 +47,8 @@ module swap::implements {
     const ERR_MUST_BE_ORDER: u64 = 12;
     /// Overflow for u64
     const ERR_U64_OVERFLOW: u64 = 13;
-
+    /// Incorrect swap
+    const ERR_INCORRECT_SWAP: u64 = 14;
 
     /// Current fee is 0.3%
     const FEE_MULTIPLIER: u64 = 30;
@@ -330,6 +331,18 @@ module swap::implements {
             let coin_out = coin::take(&mut pool.coin_y, coin_y_out, ctx);
             transfer::transfer(coin_out, tx_context::sender(ctx));
 
+            // The division operation truncates the decimal,
+            // Causing coin_out_value to be less than the calculated value.
+            // Thus making the actual value of new_reserve_out be more.
+            // So lp_value is increased.
+            let (new_reserve_x, new_reserve_y, _lp) = get_reserves_size(pool);
+            assert_lp_value_is_increased(
+                coin_x_reserve,
+                coin_y_reserve,
+                new_reserve_x,
+                new_reserve_y
+            );
+
             let return_values = vector::empty<u64>();
             vector::push_back(&mut return_values, coin_x_in);
             vector::push_back(&mut return_values, 0);
@@ -358,6 +371,18 @@ module swap::implements {
             balance::join(&mut pool.coin_y, coin_y_balance);
             let coin_out = coin::take(&mut pool.coin_x, coin_x_out, ctx);
             transfer::transfer(coin_out, tx_context::sender(ctx));
+
+            // The division operation truncates the decimal,
+            // Causing coin_out_value to be less than the calculated value.
+            // Thus making the actual value of new_reserve_out be more.
+            // So lp_value is increased.
+            let (new_reserve_x, new_reserve_y, _lp) = get_reserves_size(pool);
+            assert_lp_value_is_increased(
+                coin_x_reserve,
+                coin_y_reserve,
+                new_reserve_x,
+                new_reserve_y
+            );
 
             let return_values = vector::empty<u64>();
             vector::push_back(&mut return_values, 0);
@@ -443,6 +468,20 @@ module swap::implements {
         math::mul_div_u128(coin_in_val_after_fees, // scaled to 1000
             (reserve_out as u128),
             new_reserve_in  // scaled to 1000
+        )
+    }
+
+    public fun assert_lp_value_is_increased(
+        old_reserve_x: u64,
+        old_reserve_y: u64,
+        new_reserve_x: u64,
+        new_reserve_y: u64,
+    ) {
+        // never overflow
+        assert!(
+            (old_reserve_x as u128) * (old_reserve_y as u128)
+                < (new_reserve_x as u128) * (new_reserve_y as u128),
+            ERR_INCORRECT_SWAP
         )
     }
 
