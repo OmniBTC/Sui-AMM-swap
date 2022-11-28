@@ -14,6 +14,7 @@ module swap::interface {
     const ERR_EMERGENCY: u64 = 102;
     const ERR_GLOBAL_MISMATCH: u64 = 103;
     const ERR_UNEXPECTED_RETURN: u64 = 104;
+    const ERR_EMPTY_COINS: u64 = 105;
 
     /// Entrypoint for the `add_liquidity` method.
     /// Sends `LP<X,Y>` to the transaction sender.
@@ -151,6 +152,10 @@ module swap::interface {
         ctx: &mut TxContext
     ) {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
+        assert!(
+            !vector::is_empty(&coins_x) && !vector::is_empty(&coins_y),
+            ERR_EMPTY_COINS
+        );
 
         // 1. merge coins
         let merged_coin_x = vector::pop_back(&mut coins_x);
@@ -197,6 +202,7 @@ module swap::interface {
         ctx: &mut TxContext
     ) {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
+        assert!(!vector::is_empty(&lp_coin), ERR_EMPTY_COINS);
 
         // 1. merge coins
         let merged_lp = vector::pop_back(&mut lp_coin);
@@ -218,6 +224,7 @@ module swap::interface {
         ctx: &mut TxContext
     ) {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
+        assert!(!vector::is_empty(&coins_in), ERR_EMPTY_COINS);
 
         // 1. merge coins
         let merged_coins_in = vector::pop_back(&mut coins_in);
