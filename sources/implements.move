@@ -110,9 +110,10 @@ module swap::implements {
     }
 
     public(friend) fun get_mut_pool<X, Y>(
-        global: &mut Global
+        global: &mut Global,
+        is_order: bool,
     ): &mut Pool<X, Y> {
-        assert!(is_order<X, Y>(), ERR_MUST_BE_ORDER);
+        assert!(is_order, ERR_MUST_BE_ORDER);
 
         let lp_name = generate_lp_name<X, Y>();
         let has_registered = bag::contains_with_type<String, Pool<X, Y>>(&global.pools, lp_name);
@@ -179,8 +180,9 @@ module swap::implements {
     /// Register pool
     public(friend) fun register_pool<X, Y>(
         global: &mut Global,
+        is_order: bool
     ) {
-        assert!(is_order<X, Y>(), ERR_MUST_BE_ORDER);
+        assert!(is_order, ERR_MUST_BE_ORDER);
 
         let lp_name = generate_lp_name<X, Y>();
         let has_registered = bag::contains_with_type<String, Pool<X, Y>>(&global.pools, lp_name);
@@ -207,9 +209,10 @@ module swap::implements {
         coin_x_min: u64,
         coin_y: Coin<Y>,
         coin_y_min: u64,
+        is_order: bool,
         ctx: &mut TxContext
     ): (Coin<LP<X, Y>>, vector<u64>) {
-        assert!(is_order<X, Y>(), ERR_MUST_BE_ORDER);
+        assert!(is_order, ERR_MUST_BE_ORDER);
 
         let coin_x_value = coin::value(&coin_x);
         let coin_y_value = coin::value(&coin_y);
@@ -279,9 +282,10 @@ module swap::implements {
     public(friend) fun remove_liquidity<X, Y>(
         pool: &mut Pool<X, Y>,
         lp_coin: Coin<LP<X, Y>>,
+        is_order: bool,
         ctx: &mut TxContext
     ): (Coin<X>, Coin<Y>) {
-        assert!(is_order<X, Y>(), ERR_MUST_BE_ORDER);
+        assert!(is_order, ERR_MUST_BE_ORDER);
 
         let lp_val = coin::value(&lp_coin);
         assert!(lp_val > 0, ERR_ZERO_AMOUNT);
@@ -304,12 +308,13 @@ module swap::implements {
         global: &mut Global,
         coin_in: Coin<X>,
         coin_out_min: u64,
+        is_order: bool,
         ctx: &mut TxContext
     ): vector<u64> {
         assert!(coin::value<X>(&coin_in) > 0, ERR_ZERO_AMOUNT);
 
-        if (is_order<X, Y>()) {
-            let pool = get_mut_pool<X, Y>(global);
+        if (is_order) {
+            let pool = get_mut_pool<X, Y>(global, is_order);
             let (coin_x_reserve, coin_y_reserve, _lp) = get_reserves_size(pool);
             assert!(coin_x_reserve > 0 && coin_y_reserve > 0, ERR_RESERVES_EMPTY);
             let coin_x_in = coin::value(&coin_in);
@@ -350,7 +355,7 @@ module swap::implements {
             vector::push_back(&mut return_values, coin_y_out);
             return_values
         } else {
-            let pool = get_mut_pool<Y, X>(global);
+            let pool = get_mut_pool<Y, X>(global, !is_order);
             let (coin_x_reserve, coin_y_reserve, _lp) = get_reserves_size(pool);
             assert!(coin_x_reserve > 0 && coin_y_reserve > 0, ERR_RESERVES_EMPTY);
             let coin_y_in = coin::value(&coin_in);
@@ -521,10 +526,11 @@ module swap::implements {
         coin_y: Coin<Y>,
         ctx: &mut TxContext
     ): (Coin<LP<X, Y>>, vector<u64>) {
+        let is_order = is_order<X, Y>();
         if (!has_registered<X, Y>(global)) {
-            register_pool<X, Y>(global)
+            register_pool<X, Y>(global, is_order)
         };
-        let pool = get_mut_pool<X, Y>(global);
+        let pool = get_mut_pool<X, Y>(global, is_order);
 
         add_liquidity(
             pool,
@@ -532,6 +538,7 @@ module swap::implements {
             1,
             coin_y,
             1,
+            is_order,
             ctx
         )
     }
@@ -540,7 +547,7 @@ module swap::implements {
     public fun get_mut_pool_for_testing<X, Y>(
         global: &mut Global
     ): &mut Pool<X, Y> {
-        get_mut_pool<X, Y>(global)
+        get_mut_pool<X, Y>(global, is_order<X, Y>())
     }
 
     #[test_only]
@@ -554,6 +561,7 @@ module swap::implements {
             global,
             coin_in,
             coin_out_min,
+            is_order<X, Y>(),
             ctx
         )
     }
@@ -567,6 +575,7 @@ module swap::implements {
         remove_liquidity<X, Y>(
             pool,
             lp_coin,
+            is_order<X, Y>(),
             ctx
         )
     }
@@ -576,7 +585,7 @@ module swap::implements {
         global: &mut Global,
         ctx: &mut TxContext
     ): (Coin<X>, Coin<Y>, u64, u64) {
-        let pool = get_mut_pool<X, Y>(global);
+        let pool = get_mut_pool<X, Y>(global, is_order<X, Y>());
 
         withdraw<X, Y>(
             pool,

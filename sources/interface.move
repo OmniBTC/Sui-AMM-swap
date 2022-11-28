@@ -26,11 +26,12 @@ module swap::interface {
         ctx: &mut TxContext
     ) {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
+        let is_order = implements::is_order<X, Y>();
 
         if (!implements::has_registered<X, Y>(global)) {
-            implements::register_pool<X, Y>(global)
+            implements::register_pool<X, Y>(global, is_order)
         };
-        let pool = implements::get_mut_pool<X, Y>(global);
+        let pool = implements::get_mut_pool<X, Y>(global, is_order);
 
         let (lp, return_values) = implements::add_liquidity(
             pool,
@@ -38,6 +39,7 @@ module swap::interface {
             coin_x_min,
             coin_y,
             coin_y_min,
+            is_order,
             ctx
         );
         assert!(vector::length(&return_values) == 3, ERR_UNEXPECTED_RETURN);
@@ -71,11 +73,11 @@ module swap::interface {
         ctx: &mut TxContext
     ) {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
-
-        let pool = implements::get_mut_pool<X, Y>(global);
+        let is_order = implements::is_order<X, Y>();
+        let pool = implements::get_mut_pool<X, Y>(global, is_order);
 
         let lp_val = value(&lp_coin);
-        let (coin_x, coin_y) = implements::remove_liquidity(pool, lp_coin, ctx);
+        let (coin_x, coin_y) = implements::remove_liquidity(pool, lp_coin, is_order, ctx);
         let coin_x_val = value(&coin_x);
         let coin_y_val = value(&coin_y);
 
@@ -110,11 +112,13 @@ module swap::interface {
         ctx: &mut TxContext
     ) {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
+        let is_order = implements::is_order<X, Y>();
 
         let return_values = implements::swap_out<X, Y>(
             global,
             coin_in,
             coin_out_min,
+            is_order,
             ctx
         );
 

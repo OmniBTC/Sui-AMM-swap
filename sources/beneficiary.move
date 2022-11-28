@@ -19,7 +19,7 @@ module swap::beneficiary {
         assert!(!implements::is_emergency(global), ERR_EMERGENCY);
         assert!(implements::beneficiary(global) == tx_context::sender(ctx), ERR_NO_PERMISSIONS);
 
-        let pool = implements::get_mut_pool<X, Y>(global);
+        let pool = implements::get_mut_pool<X, Y>(global, implements::is_order<X, Y>());
         let (coin_x, coin_y, fee_coin_x, fee_coin_y) = implements::withdraw(pool, ctx);
 
         transfer::transfer(
