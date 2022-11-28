@@ -5,6 +5,9 @@ module swap::event {
     use sui::event::emit;
     use sui::object::ID;
 
+    friend swap::beneficiary;
+    friend swap::interface;
+
     /// Liquidity pool added event.
     struct AddedEvent has copy, drop {
         global: ID,
@@ -41,7 +44,7 @@ module swap::event {
         fee_coin_y: u64
     }
 
-    public fun added_event(
+    public(friend) fun added_event(
         global: ID,
         lp_name: String,
         coin_x_val: u64,
@@ -59,7 +62,7 @@ module swap::event {
         )
     }
 
-    public fun removed_event(
+    public(friend) fun removed_event(
         global: ID,
         lp_name: String,
         coin_x_val: u64,
@@ -77,7 +80,7 @@ module swap::event {
         )
     }
 
-    public fun swapped_event(
+    public(friend) fun swapped_event(
         global: ID,
         lp_name: String,
         coin_x_in: u64,
@@ -97,7 +100,7 @@ module swap::event {
         )
     }
 
-    public fun withdrew_event(
+    public(friend) fun withdrew_event(
         global: ID,
         lp_name: String,
         fee_coin_x: u64,
