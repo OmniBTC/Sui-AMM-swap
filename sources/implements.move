@@ -77,6 +77,7 @@ module swap::implements {
         coin_y: Balance<Y>,
         fee_coin_y: Balance<Y>,
         lp_supply: Supply<LP<X, Y>>,
+        min_liquidity: Balance<LP<X, Y>>,
     }
 
     /// The global config
@@ -196,6 +197,7 @@ module swap::implements {
             coin_y: balance::zero<Y>(),
             fee_coin_y: balance::zero<Y>(),
             lp_supply,
+            min_liquidity: balance::zero<LP<X, Y>>()
         };
         bag::add(&mut global.pools, lp_name, new_pool);
     }
@@ -233,8 +235,15 @@ module swap::implements {
         );
 
         let provided_liq = if (0 == lp_supply) {
-            let initial_liq = math::sqrt(optimal_coin_x) * math::sqrt(optimal_coin_y);
+            let initial_liq = math::sqrt(math::mul_to_u128(optimal_coin_x, optimal_coin_y));
             assert!(initial_liq > MINIMAL_LIQUIDITY, ERR_LIQUID_NOT_ENOUGH);
+
+            let minimal_liquidity = balance::increase_supply(
+                &mut pool.lp_supply,
+                MINIMAL_LIQUIDITY
+            );
+            balance::join(&mut pool.min_liquidity, minimal_liquidity);
+
             initial_liq - MINIMAL_LIQUIDITY
         } else {
             let x_liq = (lp_supply as u128) * (optimal_coin_x as u128) / (coin_x_reserve as u128);

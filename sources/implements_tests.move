@@ -30,7 +30,7 @@ module swap::implements_tests {
     use sui::test_scenario::{Self, Scenario, next_tx, ctx, end};
 
     use swap::implements::{Self, LP, Global};
-    use swap::math::sqrt;
+    use swap::math::{sqrt, mul_to_u128};
 
     const XBTC_AMOUNT: u64 = 100000000;
     const USDT_AMOUNT: u64 = 1900000000000;
@@ -184,7 +184,7 @@ module swap::implements_tests {
             );
 
             let burn = burn(lp);
-            assert!(burn == sqrt(USDT_AMOUNT) * sqrt(XBTC_AMOUNT) - MINIMAL_LIQUIDITY, burn);
+            assert!(burn == sqrt(mul_to_u128(USDT_AMOUNT, XBTC_AMOUNT)) - MINIMAL_LIQUIDITY, burn);
 
             test_scenario::return_shared(global)
         };
@@ -196,7 +196,7 @@ module swap::implements_tests {
 
             let (reserve_usdt, reserve_xbtc, lp_supply) = implements::get_reserves_size(pool);
 
-            assert!(lp_supply == sqrt(USDT_AMOUNT) * sqrt(XBTC_AMOUNT) - MINIMAL_LIQUIDITY, lp_supply);
+            assert!(lp_supply == sqrt(mul_to_u128(USDT_AMOUNT, XBTC_AMOUNT)), lp_supply);
             assert!(reserve_usdt == USDT_AMOUNT, 0);
             assert!(reserve_xbtc == XBTC_AMOUNT, 0);
 
@@ -225,7 +225,7 @@ module swap::implements_tests {
             );
 
             let burn = burn(lp_tokens);
-            assert!(burn == 137840390, burn);
+            assert!(burn == 137840487, burn);
 
             test_scenario::return_shared(global)
         };
@@ -386,7 +386,7 @@ module swap::implements_tests {
             );
 
             let burn = burn(lp);
-            assert!(burn == sqrt(usdt_val) * sqrt(xbtc_val) - MINIMAL_LIQUIDITY, burn);
+            assert!(burn == sqrt(mul_to_u128(usdt_val, xbtc_val)) - MINIMAL_LIQUIDITY, burn);
 
             test_scenario::return_shared(global)
         };
@@ -465,7 +465,7 @@ module swap::implements_tests {
             );
 
             let burn = burn(lp);
-            assert!(burn == sqrt(usdt_val) * sqrt(xbtc_val) - MINIMAL_LIQUIDITY, burn);
+            assert!(burn == sqrt(mul_to_u128(usdt_val, xbtc_val)) - MINIMAL_LIQUIDITY, burn);
 
             test_scenario::return_shared(global)
         };
