@@ -49,6 +49,8 @@ module swap::implements {
     const ERR_U64_OVERFLOW: u64 = 13;
     /// Incorrect swap
     const ERR_INCORRECT_SWAP: u64 = 14;
+    /// Insufficient liquidity
+    const ERR_INSUFFICIENT_LIQUIDITY_MINTED: u64 = 15;
 
     /// Current fee is 0.3%
     const FEE_MULTIPLIER: u64 = 30;
@@ -256,6 +258,7 @@ module swap::implements {
                 (y_liq as u64)
             }
         };
+        assert!(provided_liq > 0, ERR_INSUFFICIENT_LIQUIDITY_MINTED);
 
         if (optimal_coin_x < coin_x_value) {
             transfer::transfer(
