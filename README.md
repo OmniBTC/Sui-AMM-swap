@@ -6,13 +6,13 @@ The first open source AMM swap on the [Sui](https://github.com/MystenLabs).
 ## cmd for tests
 ```bash
 $ issue XBTC and USDT test coins
-XBTC="0xb79c96a614a2bbf658a905d4ccae5b5e26cdcb36::coins::XBTC"
-USDT="0xb79c96a614a2bbf658a905d4ccae5b5e26cdcb36::coins::USDT"
+XBTC="0x985c26f5edba256380648d4ad84b202094a4ade3::coins::XBTC"
+USDT="0x985c26f5edba256380648d4ad84b202094a4ade3::coins::USDT"
 SUI="0x2::sui::SUI"
 
 $ sui client publish --gas-budget 10000
-package=0x1a5d746c243abc6dd1c0bd0a710e1d79881f0aef
-global=0xd6138a04638992f94ed84bdb214034f363ed1a4f
+package=0xc6f8ce30d96bb9b728e000be94e25cab1a6011d1
+global=0x28ae932ee07d4a0881e4bd24f630fe7b0d18a332
 
 $ sui client objects
 sui_coin=0x525c0eb0e1f4d8744ae21984de2e8a089366a557

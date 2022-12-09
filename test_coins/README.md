@@ -5,10 +5,12 @@
 ```bash
 # deploy on sui devnet 0.18
 sui client publish --gas-budget 10000
-package=0xb79c96a614a2bbf658a905d4ccae5b5e26cdcb36
-faucet=0x2be30513b2d84a9b802c0824bbc96c8a665cdafe
+package=0x5f205364e20114075512028e2c3976bbaaa5f482
+faucet=0x37019bd3aa332a1ee442c76c6ceaf9390a6e99de
 USDT="$package::coins::USDT"
 XBTC="$package::coins::XBTC"
+# require deployed swap
+swap_global=0x28ae932ee07d4a0881e4bd24f630fe7b0d18a332
 
 # add faucet admin
 sui client call \
@@ -17,7 +19,7 @@ sui client call \
   --module faucet \
   --function add_admin \
   --args $faucet \
-      0xc05eaaf1369ece51ce0b8ad5cb797b737d4f2eba
+      0x4d7a8549beb8d9349d76a71fd4f479513622532b
 
 # claim usdt
 sui client call \
@@ -49,4 +51,12 @@ sui client call \
   --args $faucet \
          $PCX_CAP \
   --type-args $PCX
+  
+# force add liquidity
+sui client call \
+  --gas-budget 100000 \
+  --package $package \
+  --module faucet \
+  --function force_add_liquidity \
+  --args $faucet $swap_global
 ```
