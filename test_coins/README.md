@@ -3,12 +3,12 @@
 ## cmd
 
 ```bash
-# deploy on sui testnet
+# deploy on sui devnet 0.18
 sui client publish --gas-budget 10000
-package=0xc7fb1756b094e8d3ae5f766ff5800b89e31bd72a
-faucet=0xef48dfe069d691da85e5195559264e96c0817850
-USDT="0xc7fb1756b094e8d3ae5f766ff5800b89e31bd72a::coins::USDT"
-XBTC="0xc7fb1756b094e8d3ae5f766ff5800b89e31bd72a::coins::XBTC"
+package=0xb79c96a614a2bbf658a905d4ccae5b5e26cdcb36
+faucet=0x2be30513b2d84a9b802c0824bbc96c8a665cdafe
+USDT="$package::coins::USDT"
+XBTC="$package::coins::XBTC"
 
 # add faucet admin
 sui client call \
@@ -17,7 +17,7 @@ sui client call \
   --module faucet \
   --function add_admin \
   --args $faucet \
-      0x4d7a8549beb8d9349d76a71fd4f479513622532b
+      0xc05eaaf1369ece51ce0b8ad5cb797b737d4f2eba
 
 # claim usdt
 sui client call \
