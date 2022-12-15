@@ -2,8 +2,7 @@
 
 The first open source AMM swap on the [Sui](https://github.com/MystenLabs).
 
-## [https://movebit.xyz/file/Sui-AMM-swap-Contracts-Audit-Report.pdf](https://movebit.xyz/file/Sui-AMM-swap-Contracts-Audit-Report.pdf)
-
+## [Audit Report](https://movebit.xyz/file/Sui-AMM-swap-Contracts-Audit-Report.pdf)
 
 ## cmd for tests
 ```bash
