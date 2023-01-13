@@ -142,7 +142,7 @@ module swap::implements_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 2)]
+    #[expected_failure(abort_code = swap::implements::ERR_POOL_FULL)]
     fun test_add_liquidity_aborts_if_pool_has_full() {
         let scenario = scenario();
         add_liquidity_aborts_if_pool_has_full(&mut scenario);

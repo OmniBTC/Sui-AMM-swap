@@ -7,7 +7,7 @@ version = "1.0.0"
 Sui = { local = "../sui/crates/sui-framework" }
 
 [addresses]
-# TODO: replace real address for test_coin
+# Note: replace real swap address for test_coins
 swap = "0x0"
 
 # TODO: replace controller and beneficiary on mainnet
