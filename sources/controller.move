@@ -23,4 +23,13 @@ module swap::controller {
         assert!(implements::controller(global) == tx_context::sender(ctx), ERR_NO_PERMISSIONS);
         implements::resume(global)
     }
+
+    /// Entrypoint for the `modify_controller` method.
+    /// Set new controller
+    public entry fun modify_controller(
+        global: &mut Global, new_controller: address, ctx: &mut TxContext
+    ) {
+        assert!(implements::controller(global) == tx_context::sender(ctx), ERR_NO_PERMISSIONS);
+        implements::modify_controller(global, new_controller)
+    }
 }

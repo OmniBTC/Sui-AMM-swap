@@ -140,6 +140,10 @@ module swap::implements {
         global.has_paused = false
     }
 
+    public(friend) fun modify_controller(global: &mut Global, new_controller: address) {
+        global.controller = new_controller
+    }
+
     public(friend) fun is_emergency(global: &Global): bool {
         global.has_paused
     }
