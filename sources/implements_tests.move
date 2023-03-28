@@ -25,7 +25,7 @@ module swap::implements_tests {
     use std::type_name::{get, into_string};
     use std::vector;
 
-    use sui::coin::{mint_for_testing as mint, destroy_for_testing as burn};
+    use sui::coin::{mint_for_testing as mint, burn_for_testing as burn};
     use sui::sui::SUI;
     use sui::test_scenario::{Self, Scenario, next_tx, ctx, end};
 
@@ -49,15 +49,15 @@ module swap::implements_tests {
     #[test]
     fun test_lp_name() {
         let expect_name = utf8(
-            b"LP-0000000000000000000000000000000000000002::sui::SUI-0000000000000000000000000000000000000000::implements_tests::BEEP"
+            b"LP-0000000000000000000000000000000000000000000000000000000000000002::sui::SUI-0000000000000000000000000000000000000000000000000000000000000000::implements_tests::BEEP"
         );
 
         assert!(
-            into_bytes(into_string(get<SUI>())) == b"0000000000000000000000000000000000000002::sui::SUI",
+            into_bytes(into_string(get<SUI>())) == b"0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
             1
         );
         assert!(
-            into_bytes(into_string(get<BEEP>())) == b"0000000000000000000000000000000000000000::implements_tests::BEEP",
+            into_bytes(into_string(get<BEEP>())) == b"0000000000000000000000000000000000000000000000000000000000000000::implements_tests::BEEP",
             2
         );
 
@@ -77,7 +77,7 @@ module swap::implements_tests {
         assert!(lp_name == expect_name, 5);
 
         let expect_name = utf8(
-            b"LP-0000000000000000000000000000000000000000::implements_tests::USDT-0000000000000000000000000000000000000000::implements_tests::XBTC"
+            b"LP-0000000000000000000000000000000000000000000000000000000000000000::implements_tests::USDT-0000000000000000000000000000000000000000000000000000000000000000::implements_tests::XBTC"
         );
 
         let lp_name = implements::generate_lp_name<XBTC, USDT>();

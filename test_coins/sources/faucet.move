@@ -102,7 +102,7 @@ module test::faucet {
         faucet: &mut Faucet,
         ctx: &mut TxContext,
     ) {
-        transfer::transfer(
+        transfer::public_transfer(
             mint_coins<T>(faucet, 1, ctx),
             tx_context::sender(ctx)
         )
@@ -120,7 +120,7 @@ module test::faucet {
             ERR_NO_PERMISSIONS
         );
 
-        transfer::transfer(
+        transfer::public_transfer(
             mint_coins<T>(faucet, amount, ctx),
             operator
         )

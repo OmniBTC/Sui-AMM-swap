@@ -22,11 +22,11 @@ module swap::beneficiary {
         let pool = implements::get_mut_pool<X, Y>(global, implements::is_order<X, Y>());
         let (coin_x, coin_y, fee_coin_x, fee_coin_y) = implements::withdraw(pool, ctx);
 
-        transfer::transfer(
+        transfer::public_transfer(
             coin_x,
             tx_context::sender(ctx)
         );
-        transfer::transfer(
+        transfer::public_transfer(
             coin_y,
             tx_context::sender(ctx)
         );

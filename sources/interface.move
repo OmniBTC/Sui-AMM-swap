@@ -49,7 +49,7 @@ module swap::interface {
         let coin_x_val = vector::pop_back(&mut return_values);
         let coin_y_val = vector::pop_back(&mut return_values);
 
-        transfer::transfer(
+        transfer::public_transfer(
             lp,
             tx_context::sender(ctx)
         );
@@ -82,12 +82,12 @@ module swap::interface {
         let coin_x_val = value(&coin_x);
         let coin_y_val = value(&coin_y);
 
-        transfer::transfer(
+        transfer::public_transfer(
             coin_x,
             tx_context::sender(ctx)
         );
 
-        transfer::transfer(
+        transfer::public_transfer(
             coin_y,
             tx_context::sender(ctx)
         );
@@ -178,7 +178,7 @@ module swap::interface {
 
         // 3. handle remain coins
         if (value(&merged_coin_x) > 0) {
-            transfer::transfer(
+            transfer::public_transfer(
                 merged_coin_x,
                 tx_context::sender(ctx)
             )
@@ -187,7 +187,7 @@ module swap::interface {
         };
 
         if (value(&merged_coin_y) > 0) {
-            transfer::transfer(
+            transfer::public_transfer(
                 merged_coin_y,
                 tx_context::sender(ctx)
             )
@@ -241,7 +241,7 @@ module swap::interface {
 
         // 3. handle remain coin
         if (value(&merged_coins_in) > 0) {
-            transfer::transfer(
+            transfer::public_transfer(
                 merged_coins_in,
                 tx_context::sender(ctx)
             )

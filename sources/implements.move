@@ -265,13 +265,13 @@ module swap::implements {
         assert!(provided_liq > 0, ERR_INSUFFICIENT_LIQUIDITY_MINTED);
 
         if (optimal_coin_x < coin_x_value) {
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance::split(&mut coin_x_balance, coin_x_value - optimal_coin_x), ctx),
                 tx_context::sender(ctx)
             )
         };
         if (optimal_coin_y < coin_y_value) {
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance::split(&mut coin_y_balance, coin_y_value - optimal_coin_y), ctx),
                 tx_context::sender(ctx)
             )
@@ -350,7 +350,7 @@ module swap::implements {
             balance::join(&mut pool.fee_coin_x, balance::split(&mut coin_x_balance, coin_x_fee));
             balance::join(&mut pool.coin_x, coin_x_balance);
             let coin_out = coin::take(&mut pool.coin_y, coin_y_out, ctx);
-            transfer::transfer(coin_out, tx_context::sender(ctx));
+            transfer::public_transfer(coin_out, tx_context::sender(ctx));
 
             // The division operation truncates the decimal,
             // Causing coin_out_value to be less than the calculated value.
@@ -391,7 +391,7 @@ module swap::implements {
             balance::join(&mut pool.fee_coin_y, balance::split(&mut coin_y_balance, coin_y_fee));
             balance::join(&mut pool.coin_y, coin_y_balance);
             let coin_out = coin::take(&mut pool.coin_x, coin_x_out, ctx);
-            transfer::transfer(coin_out, tx_context::sender(ctx));
+            transfer::public_transfer(coin_out, tx_context::sender(ctx));
 
             // The division operation truncates the decimal,
             // Causing coin_out_value to be less than the calculated value.
